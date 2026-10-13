@@ -9240,6 +9240,136 @@ fn alt_click_on_file_path_resolves_against_attached_worktree() {
     assert!(app.pane.term_selection.is_none(), "no selection armed");
 }
 
+/// A pane showing `see https://example.com ok` on its top row, its links
+/// detected the way a draw leaves them.
+fn pane_with_a_link(app: &mut App) {
+    let sref = SessionRef::Agent(AgentId("a1".into()));
+    let mut term = AttachedTerm::new(sref, 80, 24);
+    term.parser.process(b"see https://example.com ok");
+    app.pane.term = Some(term);
+    app.pane.term_area = ratatui::layout::Rect::new(0, 0, 80, 24);
+    app.chrome
+        .hits
+        .push((app.pane.term_area, HitTarget::TerminalPane));
+    app.pane.term_links =
+        crate::links::visible_links(app.pane.term.as_ref().unwrap().parser.screen());
+}
+
+/// Bare motion — no button — to host cell `(column, row)`.
+fn hover(app: &mut App, column: u16, row: u16, out: &mut Vec<ClientRequest>) {
+    let moved = MouseEvent {
+        kind: MouseEventKind::Moved,
+        column,
+        row,
+        modifiers: KeyModifiers::NONE,
+    };
+    handle_mouse(app, moved, out);
+}
+
+/// OPEN LINK UNDER POINTER: the pointer rests on a URL and `w` opens it,
+/// as ⌥click on the same cell would, without the click moving anything.
+#[test]
+fn w_opens_the_link_the_pointer_rests_on() {
+    let mut app = App::new();
+    seed_tree(&mut app);
+    let mut out = Vec::new();
+    pane_with_a_link(&mut app);
+    app.nav.focus = Focus::Projects;
+
+    hover(&mut app, 6, 0, &mut out);
+    handle_terminal_event(
+        &mut app,
+        key(KeyCode::Char('w'), KeyModifiers::NONE),
+        &mut out,
+    );
+    assert_eq!(
+        app.chrome.flash.as_deref(),
+        Some("opened https://example.com")
+    );
+    assert_eq!(app.nav.focus, Focus::Projects, "focus is untouched");
+    assert!(!app.pane.term_locked, "input stays unlocked");
+}
+
+/// …and with the pointer off every link, nothing opens and the footer
+/// says why the key did nothing.
+#[test]
+fn w_with_no_link_under_the_pointer_says_so() {
+    let mut app = App::new();
+    seed_tree(&mut app);
+    let mut out = Vec::new();
+    pane_with_a_link(&mut app);
+    app.nav.focus = Focus::Projects;
+
+    // Before any mouse report there is no pointer to read.
+    handle_terminal_event(
+        &mut app,
+        key(KeyCode::Char('w'), KeyModifiers::NONE),
+        &mut out,
+    );
+    assert_eq!(
+        app.chrome.flash.as_deref(),
+        Some("no link under the pointer")
+    );
+
+    // On the pane, on a cell with no link.
+    app.chrome.flash = None;
+    hover(&mut app, 0, 0, &mut out);
+    handle_terminal_event(
+        &mut app,
+        key(KeyCode::Char('w'), KeyModifiers::NONE),
+        &mut out,
+    );
+    assert_eq!(
+        app.chrome.flash.as_deref(),
+        Some("no link under the pointer")
+    );
+}
+
+/// In a LOCKED PANE the default `w` is text, and the agent's; a ctrl
+/// chord bound beside it opens the link and the keys stay in the session.
+#[test]
+fn a_locked_pane_keeps_w_but_lets_a_bound_ctrl_chord_open_the_link() {
+    let mut app = App::new();
+    seed_tree(&mut app);
+    let mut out = Vec::new();
+    pane_with_a_link(&mut app);
+    app.nav.focus = Focus::Terminal;
+    app.pane.term_locked = true;
+    hover(&mut app, 6, 0, &mut out);
+
+    out.clear();
+    handle_terminal_event(
+        &mut app,
+        key(KeyCode::Char('w'), KeyModifiers::NONE),
+        &mut out,
+    );
+    assert!(
+        matches!(out.as_slice(), [ClientRequest::Input { .. }]),
+        "w went to the PTY: {out:?}"
+    );
+    assert!(app.chrome.flash.is_none(), "and opened nothing");
+
+    let index = crate::keymap::index_of(crate::keymap::Action::OpenLinkUnderPointer).unwrap();
+    app.chrome.keymap.bind(
+        index,
+        crate::keymap::KeyChord::parse("ctrl+o").unwrap(),
+        true,
+    );
+    out.clear();
+    handle_terminal_event(
+        &mut app,
+        key(KeyCode::Char('o'), KeyModifiers::CONTROL),
+        &mut out,
+    );
+    assert!(out.is_empty(), "the chord never reached the PTY: {out:?}");
+    assert_eq!(
+        app.chrome.flash.as_deref(),
+        Some("opened https://example.com")
+    );
+    assert!(app.pane.term_locked, "the keys stay in the session");
+    assert_eq!(app.nav.focus, Focus::Terminal);
+}
+
 #[test]
 fn resolve_file_link_handles_diff_prefixes_and_absolutes() {
     let dir = tempfile::tempdir().unwrap();

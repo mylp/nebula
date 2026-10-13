@@ -494,6 +494,7 @@ pub(crate) fn pointer_wants_resize(app: &App, column: u16, row: u16) -> bool {
 /// don't report motion (Terminal.app) still pass through here on clicks and
 /// drags, so drag state keeps the shape honest where hover can't.
 pub(crate) fn update_pointer(app: &mut App, mouse: &MouseEvent) {
+    app.chrome.pointer_at = Some((mouse.column, mouse.row));
     // One hit-test feeds both boundaries and both grips. The modals draw
     // their own file-list edge outside the hit map, so `pointer_wants_resize`
     // still measures that one itself.

@@ -126,6 +126,18 @@ fn handle_locked_pane_key(app: &mut App, key: KeyEvent, out: &mut Vec<ClientRequ
             launcher::open_project_menu(app);
             return true;
         }
+        // OPEN LINK UNDER POINTER from inside the pane: the link the
+        // pointer rests on opens without the keys leaving the session.
+        if opens_link_under_pointer(app, &chord) {
+            crate::key_combo::note(
+                app,
+                &[chord],
+                crate::keymap::spec_of(crate::keymap::Action::OpenLinkUnderPointer)
+                    .map(|s| s.label),
+            );
+            mouse_modes::open_link_under_pointer(app);
+            return true;
+        }
         let exited = app.pane.term.as_ref().is_some_and(|t| t.exited);
         // A stand-in pane (QUICK PROMPT, checkout still being cut) has no
         // PTY behind it: the keystroke has nowhere to go until the real
@@ -658,6 +670,7 @@ fn handle_tool_action(app: &mut App, action: crate::keymap::Action, out: &mut Ve
         // New shell terminal, spawned in the worktree's directory.
         // (Cmd+T never reaches a TUI — the emulator opens its own tab.)
         Action::NewTerminal => create_terminal_for_context(app, out),
+        Action::OpenLinkUnderPointer => mouse_modes::open_link_under_pointer(app),
         // Terminal-scope only; never resolved here.
         Action::UnlockTerminal => {}
         _ => unreachable!("global action dispatcher passed the wrong action"),

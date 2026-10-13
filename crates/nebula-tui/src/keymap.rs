@@ -153,6 +153,10 @@ pub enum Action {
     /// give way to the PTY — or bring it back down to the pane beside the
     /// cards. From the cards it full-screens the one under the cursor.
     ToggleFullScreen,
+    /// `w`: open the URL or `path:line` the mouse pointer rests on in the
+    /// PANE — the ⌥click's link, without the click. From inside the pane
+    /// too, when it is bound to a chord no one types as text.
+    OpenLinkUnderPointer,
     /// `` ` ``: walk the TERMINAL cards of the cursor's checkout, one after
     /// another and back round to the first. What the pane READS, where
     /// `^~` is whether it is drawn at all.
@@ -650,6 +654,15 @@ pub const ACTIONS: &[ActionSpec] = &[
         group: "GENERAL",
         scope: Scope::Global,
         defaults: &["ctrl+f"],
+    },
+    ActionSpec {
+        action: Action::OpenLinkUnderPointer,
+        id: "open_link_under_pointer",
+        label: "Open link under pointer",
+        hint: "Open the URL or path:line the mouse pointer rests on in the pane — what ⌥click opens, without the click. Bind a ctrl chord to use it from inside the pane too; a key that types text stays the agent's there",
+        group: "GENERAL",
+        scope: Scope::Global,
+        defaults: &["w"],
     },
     ActionSpec {
         action: Action::PaneTabs,

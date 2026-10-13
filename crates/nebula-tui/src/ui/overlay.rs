@@ -503,6 +503,10 @@ const HELP_RIGHT: &[HelpSection] = &[
             (Lit("drag"), "select + copy (2×click: word)"),
             (Lit("click / drag"), "the app that took the mouse"),
             (Lit("⌥click"), "open URL / file under cursor"),
+            (
+                Act(&[OpenLinkUnderPointer]),
+                "open the link under the pointer",
+            ),
             (Lit("⇧drag"), "select via your terminal"),
             (Lit("right-click"), "card / tab menu: run, restart"),
             (Lit("drag the pane edge"), "resize the pane"),

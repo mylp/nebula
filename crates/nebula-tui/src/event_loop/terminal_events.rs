@@ -308,6 +308,18 @@ pub(crate) fn toggles_full_screen(app: &App, chord: &crate::keymap::KeyChord) ->
             .contains(chord)
 }
 
+/// Is `chord` OPEN LINK UNDER POINTER's in a form a LOCKED PANE lets
+/// through rather than takes as text — the default `w` is the agent's
+/// there, a ctrl chord bound beside it is not.
+pub(crate) fn opens_link_under_pointer(app: &App, chord: &crate::keymap::KeyChord) -> bool {
+    !crate::key_combo::is_text_key(chord)
+        && app
+            .chrome
+            .keymap
+            .chords(crate::keymap::Action::OpenLinkUnderPointer)
+            .contains(chord)
+}
+
 /// Is `chord` the PROJECT DROPDOWN's (`⌘P`, whatever the Hotkeys tab binds
 /// to it) in a form a LOCKED PANE or the dropdown's own TYPE-AHEAD lets
 /// through rather than takes as text — a chord with a command modifier,

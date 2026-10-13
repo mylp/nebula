@@ -672,13 +672,28 @@ fn handle_alt_terminal_link_click(app: &mut App, mouse: MouseEvent) -> bool {
     // swallowed so it doesn't move focus or disturb the selection.
     // (Cmd never reaches us — the SGR mouse protocol has no such
     // bit — so Option is the "open link" modifier.)
-    if mouse.modifiers.contains(KeyModifiers::ALT)
-        && matches!(
-            app.hit_at(mouse.column, mouse.row),
-            Some(HitTarget::TerminalPane)
-        )
-    {
-        let cell = pane_cell(app.pane.term_area, mouse.column, mouse.row);
+    mouse.modifiers.contains(KeyModifiers::ALT)
+        && open_terminal_link_at(app, mouse.column, mouse.row)
+}
+
+/// OPEN LINK UNDER POINTER: the link the ⌥click would open, at wherever the
+/// pointer rests, opened by a key instead. A pointer off the pane or on no
+/// link opens nothing and says so in the footer.
+pub(super) fn open_link_under_pointer(app: &mut App) {
+    let at = app.chrome.pointer_at;
+    if !at.is_some_and(|(column, row)| open_terminal_link_at(app, column, row)) {
+        app.chrome.flash = Some("no link under the pointer".into());
+        app.chrome.dirty = true;
+    }
+}
+
+/// Open the link drawn at host cell `(column, row)` of the TERMINAL PANE:
+/// a URL in the browser, a `path:line` in the editor modal. False — and
+/// nothing opened — when the cell is off the pane or on no link. The
+/// ⌥click and OPEN LINK UNDER POINTER both land here.
+pub(super) fn open_terminal_link_at(app: &mut App, column: u16, row: u16) -> bool {
+    if matches!(app.hit_at(column, row), Some(HitTarget::TerminalPane)) {
+        let cell = pane_cell(app.pane.term_area, column, row);
         if let Some(url) = app
             .pane
             .term_links
