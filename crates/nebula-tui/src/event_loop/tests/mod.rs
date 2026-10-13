@@ -9316,7 +9316,8 @@ fn w_with_no_link_under_the_pointer_says_so() {
 
 /// A host that reports clicks but never bare motion (Terminal.app): the
 /// last click is not where the pointer rests, so `w` opens nothing — not
-/// even the URL that click landed on — and names the terminal as why.
+/// even the URL that click landed on — and asks for a move, naming ⌥click
+/// for the terminal that will never send one.
 #[test]
 fn w_on_a_terminal_that_reports_no_motion_opens_nothing_and_says_why() {
     let mut app = App::new();
@@ -9352,32 +9353,49 @@ fn w_on_a_terminal_that_reports_no_motion_opens_nothing_and_says_why() {
     );
     assert_eq!(
         app.chrome.flash.as_deref(),
-        Some("this terminal doesn't report where the pointer rests — ⌥click the link")
+        Some("move the pointer onto the link (Terminal.app never reports it: ⌥click)")
     );
 }
 
-/// A resize can move the cell grid under a pointer that sent nothing, so
-/// it forgets the pointer: `w` waits for the next motion report rather than
-/// opening whatever now sits at the old cell.
+/// A resize can move the cell grid under a pointer that sent nothing, and
+/// a lost focus means the pointer went elsewhere, so both forget it: `w`
+/// asks for the pointer again rather than opening whatever now sits at the
+/// old cell, or saying there is no link where one may well be.
 #[test]
-fn a_resize_forgets_where_the_pointer_was() {
-    let mut app = App::new();
-    seed_tree(&mut app);
-    let mut out = Vec::new();
-    pane_with_a_link(&mut app);
-    app.nav.focus = Focus::Projects;
+fn a_resize_or_a_lost_focus_forgets_where_the_pointer_was() {
+    for forget in [Event::Resize(100, 30), Event::FocusLost] {
+        let mut app = App::new();
+        seed_tree(&mut app);
+        let mut out = Vec::new();
+        pane_with_a_link(&mut app);
+        app.nav.focus = Focus::Projects;
 
-    hover(&mut app, 6, 0, &mut out);
-    handle_terminal_event(&mut app, Event::Resize(100, 30), &mut out);
-    handle_terminal_event(
-        &mut app,
-        key(KeyCode::Char('w'), KeyModifiers::NONE),
-        &mut out,
-    );
-    assert_eq!(
-        app.chrome.flash.as_deref(),
-        Some("no link under the pointer")
-    );
+        hover(&mut app, 6, 0, &mut out);
+        handle_terminal_event(&mut app, forget.clone(), &mut out);
+        handle_terminal_event(
+            &mut app,
+            key(KeyCode::Char('w'), KeyModifiers::NONE),
+            &mut out,
+        );
+        assert_eq!(
+            app.chrome.flash.as_deref(),
+            Some("move the pointer onto the link again"),
+            "after {forget:?}"
+        );
+
+        // The next motion report is believed again.
+        hover(&mut app, 6, 0, &mut out);
+        handle_terminal_event(
+            &mut app,
+            key(KeyCode::Char('w'), KeyModifiers::NONE),
+            &mut out,
+        );
+        assert_eq!(
+            app.chrome.flash.as_deref(),
+            Some("opened https://example.com"),
+            "after {forget:?}"
+        );
+    }
 }
 
 /// A `path:line` under the pointer takes the ⌥click's file path: resolved
