@@ -3824,11 +3824,17 @@ pub struct ChromeState {
     pub keymap: crate::keymap::Keymap,
     /// Pointer shape the outer terminal should currently show (OSC 22).
     pub pointer_shape: PointerShape,
-    /// Where the mouse pointer was at the last mouse report, in host cells:
-    /// the cell OPEN LINK UNDER POINTER reads. The host reports bare motion
-    /// (`?1003h`), so this follows the pointer, not only its clicks. `None`
-    /// until the first report.
+    /// Where the mouse pointer rests, in host cells, from the last bare
+    /// motion report: the cell OPEN LINK UNDER POINTER reads. Only motion
+    /// counts — a host that reports clicks alone (Terminal.app) would leave
+    /// the last click here, not the pointer. `None` until the first motion,
+    /// and again after a resize or a lost focus, when the cell grid may have
+    /// moved under a pointer that sent nothing.
     pub pointer_at: Option<(u16, u16)>,
+    /// Whether the host has ever reported bare motion this run — what tells
+    /// "the pointer is on no link" from "this terminal never says where the
+    /// pointer is".
+    pub pointer_motion_seen: bool,
     /// The last key press, spelled for the bottom-left of the screen with
     /// what it did, while the press is fresh; the loop clears it after
     /// `key_combo::LINGER`. See `key_combo.rs`.
@@ -3918,6 +3924,7 @@ impl Default for ChromeState {
             keymap: crate::keymap::Keymap::default(),
             pointer_shape: PointerShape::default(),
             pointer_at: None,
+            pointer_motion_seen: false,
             key_combo: None,
             dirty: true,
             should_quit: false,

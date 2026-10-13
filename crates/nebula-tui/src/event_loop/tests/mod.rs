@@ -9300,17 +9300,6 @@ fn w_with_no_link_under_the_pointer_says_so() {
     pane_with_a_link(&mut app);
     app.nav.focus = Focus::Projects;
 
-    // Before any mouse report there is no pointer to read.
-    handle_terminal_event(
-        &mut app,
-        key(KeyCode::Char('w'), KeyModifiers::NONE),
-        &mut out,
-    );
-    assert_eq!(
-        app.chrome.flash.as_deref(),
-        Some("no link under the pointer")
-    );
-
     // On the pane, on a cell with no link.
     app.chrome.flash = None;
     hover(&mut app, 0, 0, &mut out);
@@ -9322,6 +9311,103 @@ fn w_with_no_link_under_the_pointer_says_so() {
     assert_eq!(
         app.chrome.flash.as_deref(),
         Some("no link under the pointer")
+    );
+}
+
+/// A host that reports clicks but never bare motion (Terminal.app): the
+/// last click is not where the pointer rests, so `w` opens nothing — not
+/// even the URL that click landed on — and names the terminal as why.
+#[test]
+fn w_on_a_terminal_that_reports_no_motion_opens_nothing_and_says_why() {
+    let mut app = App::new();
+    seed_tree(&mut app);
+    let mut out = Vec::new();
+    pane_with_a_link(&mut app);
+    app.nav.focus = Focus::Projects;
+
+    let click = |kind| MouseEvent {
+        kind,
+        column: 6,
+        row: 0,
+        modifiers: KeyModifiers::NONE,
+    };
+    handle_mouse(
+        &mut app,
+        click(MouseEventKind::Down(MouseButton::Left)),
+        &mut out,
+    );
+    handle_mouse(
+        &mut app,
+        click(MouseEventKind::Up(MouseButton::Left)),
+        &mut out,
+    );
+    app.nav.focus = Focus::Projects;
+    app.pane.term_locked = false;
+    app.chrome.flash = None;
+
+    handle_terminal_event(
+        &mut app,
+        key(KeyCode::Char('w'), KeyModifiers::NONE),
+        &mut out,
+    );
+    assert_eq!(
+        app.chrome.flash.as_deref(),
+        Some("this terminal doesn't report where the pointer rests — ⌥click the link")
+    );
+}
+
+/// A resize can move the cell grid under a pointer that sent nothing, so
+/// it forgets the pointer: `w` waits for the next motion report rather than
+/// opening whatever now sits at the old cell.
+#[test]
+fn a_resize_forgets_where_the_pointer_was() {
+    let mut app = App::new();
+    seed_tree(&mut app);
+    let mut out = Vec::new();
+    pane_with_a_link(&mut app);
+    app.nav.focus = Focus::Projects;
+
+    hover(&mut app, 6, 0, &mut out);
+    handle_terminal_event(&mut app, Event::Resize(100, 30), &mut out);
+    handle_terminal_event(
+        &mut app,
+        key(KeyCode::Char('w'), KeyModifiers::NONE),
+        &mut out,
+    );
+    assert_eq!(
+        app.chrome.flash.as_deref(),
+        Some("no link under the pointer")
+    );
+}
+
+/// A `path:line` under the pointer takes the ⌥click's file path: resolved
+/// against the session's worktree, reported when it isn't there.
+#[test]
+fn w_opens_a_file_reference_the_way_alt_click_does() {
+    let mut app = App::new();
+    seed_tree(&mut app);
+    let mut out = Vec::new();
+    let sref = SessionRef::Agent(AgentId("a1".into()));
+    let mut term = AttachedTerm::new(sref, 80, 24);
+    term.parser.process(b"edited src/nope.rs:12 just now");
+    app.pane.term = Some(term);
+    app.pane.term_area = ratatui::layout::Rect::new(0, 0, 80, 24);
+    app.chrome
+        .hits
+        .push((app.pane.term_area, HitTarget::TerminalPane));
+    app.pane.term_file_links =
+        crate::links::visible_file_links(app.pane.term.as_ref().unwrap().parser.screen());
+    app.nav.focus = Focus::Projects;
+
+    hover(&mut app, 9, 0, &mut out);
+    handle_terminal_event(
+        &mut app,
+        key(KeyCode::Char('w'), KeyModifiers::NONE),
+        &mut out,
+    );
+    assert_eq!(
+        app.chrome.flash.as_deref(),
+        Some("file not found: src/nope.rs")
     );
 }
 

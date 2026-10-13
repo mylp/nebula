@@ -656,15 +656,6 @@ pub const ACTIONS: &[ActionSpec] = &[
         defaults: &["ctrl+f"],
     },
     ActionSpec {
-        action: Action::OpenLinkUnderPointer,
-        id: "open_link_under_pointer",
-        label: "Open link under pointer",
-        hint: "Open the URL or path:line the mouse pointer rests on in the pane — what ⌥click opens, without the click. Bind a ctrl chord to use it from inside the pane too; a key that types text stays the agent's there",
-        group: "GENERAL",
-        scope: Scope::Global,
-        defaults: &["w"],
-    },
-    ActionSpec {
         action: Action::PaneTabs,
         id: "pane_tabs",
         label: "Terminals in the pane",
@@ -717,6 +708,17 @@ pub const ACTIONS: &[ActionSpec] = &[
         group: "GENERAL",
         scope: Scope::Global,
         defaults: &["q", "ctrl+c"],
+    },
+    // Last on purpose: `lookup` takes the first row holding a chord, so a
+    // user who had already bound `w` to anything above keeps it.
+    ActionSpec {
+        action: Action::OpenLinkUnderPointer,
+        id: "open_link_under_pointer",
+        label: "Open link under pointer",
+        hint: "Open the URL or path:line the pointer rests on in the pane, as ⌥click does. In the pane a bare letter stays the agent's: add a chord the agent doesn't use",
+        group: "GENERAL",
+        scope: Scope::Global,
+        defaults: &["w"],
     },
 ];
 

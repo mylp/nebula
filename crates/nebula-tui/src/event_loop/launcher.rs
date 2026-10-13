@@ -3654,8 +3654,8 @@ mod tests {
 
     /// A digit opens the PROJECT TAB it counts to from the left — the
     /// click on that tab, through the same [`open_tab`] — and one past the
-    /// last tab says so rather than doing nothing. `w` means nothing on
-    /// the grid: there is no level above it to walk to.
+    /// last tab says so rather than doing nothing. `w` walks nowhere: there
+    /// is no level above the grid, and it opens no overlay.
     #[test]
     fn the_digits_open_the_project_tabs() {
         with_default_config(|| {

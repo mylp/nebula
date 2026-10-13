@@ -247,7 +247,12 @@ pub(crate) fn dispatch_input(app: &mut App, event: Event, out: &mut Vec<ClientRe
                 }
             }
         }
-        Event::Resize(_, _) => app.chrome.dirty = true,
+        // The cell grid may have moved under a pointer that sent nothing:
+        // OPEN LINK UNDER POINTER waits for the next motion report.
+        Event::Resize(_, _) => {
+            app.chrome.pointer_at = None;
+            app.chrome.dirty = true;
+        }
         // The terminal window took focus again — most often back from a
         // browser tab where a pull request was just merged or closed.
         Event::FocusGained => {
@@ -256,7 +261,11 @@ pub(crate) fn dispatch_input(app: &mut App, event: Event, out: &mut Vec<ClientRe
         }
         // …and left it: from here until it is back, a session that stops
         // to ask gets a desktop notification, since the pane can't be seen.
-        Event::FocusLost => app.chrome.window_focused = false,
+        // The pointer is off somewhere else too.
+        Event::FocusLost => {
+            app.chrome.window_focused = false;
+            app.chrome.pointer_at = None;
+        }
         _ => {}
     }
 }

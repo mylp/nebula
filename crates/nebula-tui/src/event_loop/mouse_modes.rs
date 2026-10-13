@@ -678,11 +678,16 @@ fn handle_alt_terminal_link_click(app: &mut App, mouse: MouseEvent) -> bool {
 
 /// OPEN LINK UNDER POINTER: the link the ⌥click would open, at wherever the
 /// pointer rests, opened by a key instead. A pointer off the pane or on no
-/// link opens nothing and says so in the footer.
+/// link opens nothing and says so in the footer — and a host that has never
+/// reported bare motion is named as the reason, rather than blamed on a link.
 pub(super) fn open_link_under_pointer(app: &mut App) {
     let at = app.chrome.pointer_at;
     if !at.is_some_and(|(column, row)| open_terminal_link_at(app, column, row)) {
-        app.chrome.flash = Some("no link under the pointer".into());
+        app.chrome.flash = Some(if app.chrome.pointer_motion_seen {
+            "no link under the pointer".into()
+        } else {
+            "this terminal doesn't report where the pointer rests — ⌥click the link".into()
+        });
         app.chrome.dirty = true;
     }
 }
