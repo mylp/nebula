@@ -174,6 +174,18 @@ pub(crate) fn open_on(app: &mut App, url: Option<&str>) {
         project.repo_path.clone(),
     );
     view.mine = crate::config::Config::load().pr_list_mine;
+    // Asked for someone else's pull request by name (the Worktrees cursor's,
+    // a thread's `#42`): the full list this once, unsaved, so the cursor
+    // lands on it rather than on another row.
+    if view.mine
+        && url.is_some_and(|url| {
+            rows(app, &project.id, false)
+                .iter()
+                .any(|row| row.url == url && !row.mine)
+        })
+    {
+        view.mine = false;
+    }
     let list = rows(app, &project.id, view.mine);
     rebuild_list(&mut view, &list);
     let start = url
@@ -481,13 +493,28 @@ fn refresh(app: &mut App) {
 
 /// `Ctrl+t`: only the pull requests you opened, or everyone's — written
 /// back to the `pr_list_mine` SETTING, so the next `v` opens the same way.
-/// The cursor stays on its pull request when the new list still holds it.
+/// The cursor stays on its pull request when the new list still holds it,
+/// and starts at the top when it does not.
 fn toggle_mine(app: &mut App) {
+    let Some(Overlay::PullRequests(view)) = &app.modals.overlay else {
+        return;
+    };
+    let mine = !view.mine;
+    let kept = view.selected_url.as_ref().is_some_and(|url| {
+        rows(app, &view.project, mine)
+            .iter()
+            .any(|row| &row.url == url)
+    });
     let Some(Overlay::PullRequests(view)) = &mut app.modals.overlay else {
         return;
     };
-    view.mine = !view.mine;
-    let mine = view.mine;
+    view.mine = mine;
+    // `selected` indexes the old list: a cursor whose pull request the new
+    // one drops starts at its top instead.
+    if !kept {
+        view.selected = 0;
+        view.selected_url = None;
+    }
     list_changed(app);
     let mut cfg = crate::config::Config::load();
     cfg.pr_list_mine = mine;
@@ -1045,6 +1072,9 @@ mod tests {
     /// An app with one project (`demo`), its ROOT WORKTREE when `root`,
     /// and `list` as the project's open pull requests, landed just now.
     fn app_with(list: Vec<OpenPr>, root: bool) -> (App, ProjectId) {
+        // Opening reads the `pr_list_mine` SETTING: never the dev's own. A
+        // test that saves one wraps itself in `pinned`, which nests over this.
+        crate::config::pin_config_path(format!("{DIR}/config.json").into());
         let mut app = App::new();
         let project = ProjectId("p1".into());
         app.tree.projects.push(nebula_core::Project {
@@ -1251,6 +1281,47 @@ mod tests {
             assert!(!crate::config::Config::load().pr_list_mine, "saved");
             assert_eq!(numbers(&app), [44, 43, 41]);
             assert_eq!(selected_pr(&app).map(|pr| pr.number), Some(41));
+
+            // From someone else's row further down: the top of yours, not
+            // the row at the old index (#40 here).
+            let (mut app, _) = app_with(
+                vec![
+                    mine(43, "Mine"),
+                    pr(44, "Adam's", false),
+                    pr(42, "Zack's", false),
+                    mine(41, "Also mine"),
+                    mine(40, "Third"),
+                ],
+                true,
+            );
+            open(&mut app);
+            handle_key(&mut app, key(KeyCode::Down), &mut Vec::new());
+            handle_key(&mut app, key(KeyCode::Down), &mut Vec::new());
+            assert_eq!(selected_pr(&app).map(|pr| pr.number), Some(42));
+            handle_key(&mut app, ctrl('t'), &mut Vec::new());
+            assert_eq!(selected_pr(&app).map(|pr| pr.number), Some(43));
+            assert_eq!(pending_url(&app), Some("https://github.com/o/r/pull/43"));
+        });
+    }
+
+    /// Opened on someone else's pull request by name, the modal shows
+    /// everyone's this once, on that row, and leaves the setting alone.
+    #[test]
+    fn opening_on_someone_elses_pull_request_shows_everyones_once() {
+        pinned(|| {
+            let mut cfg = crate::config::Config::load();
+            cfg.pr_list_mine = true;
+            cfg.save().unwrap();
+            let (mut app, _) = app_with(vec![mine(43, "Mine"), pr(44, "Adam's", false)], true);
+            open_on(&mut app, Some("https://github.com/o/r/pull/44"));
+            assert!(!view(&app).mine);
+            assert_eq!(selected_pr(&app).map(|pr| pr.number), Some(44));
+            assert!(crate::config::Config::load().pr_list_mine, "not saved");
+
+            app.modals.overlay = None;
+            open_on(&mut app, Some("https://github.com/o/r/pull/43"));
+            assert!(view(&app).mine, "one of yours opens on yours");
+            assert_eq!(selected_pr(&app).map(|pr| pr.number), Some(43));
         });
     }
 

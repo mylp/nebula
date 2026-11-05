@@ -637,7 +637,9 @@ under the cursor read on the right, as the pane reads a pull request: state, che
 author, branches and size, the description rendered as markdown, then the conversation. A row reads
 the way the pull request on a band's rule does — a draft dimmed with a `draft` badge, one GitHub says
 cannot merge red end to end with `conflicts` or `failing` — and the modal opens on the pull request
-the pane is reading (after a `/` jump onto one), when it reads one.
+the pane is reading (after a `/` jump onto one), when it reads one. `Ctrl+t` narrows the list to the pull
+requests you opened and back, remembered as `pr_list_mine`; a modal opened on someone else's pull
+request shows everyone's that once.
 
 Nothing new is asked of GitHub to paint it. The rows are the project's open list the OPEN PRS beat
 already keeps warm (and remembers across launches), so the modal opens on them at once; a list older

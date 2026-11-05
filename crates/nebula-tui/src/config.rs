@@ -2952,6 +2952,17 @@ thread_local! {
         const { std::cell::RefCell::new(None) };
 }
 
+/// Pin this thread's settings to `path` for the rest of the test, unless a
+/// [`with_config_path`] is already in force — for a helper that builds the
+/// state many tests share, where wrapping each body would not reach. Each
+/// test runs on its own thread, so the pin ends with it.
+#[cfg(test)]
+pub fn pin_config_path(path: PathBuf) {
+    CONFIG_PATH_OVERRIDE.with(|slot| {
+        slot.borrow_mut().get_or_insert(path);
+    });
+}
+
 #[cfg(test)]
 pub fn with_config_path<T>(path: PathBuf, f: impl FnOnce() -> T) -> T {
     CONFIG_PATH_OVERRIDE.with(|slot| {
