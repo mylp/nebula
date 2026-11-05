@@ -29,10 +29,6 @@ pub const MIN_COMPATIBLE_PROTOCOL: u32 = 52;
 /// without the check.
 pub const CHECK_WORKTREE_PROTOCOL: u32 = 51;
 
-/// First protocol whose daemon answers `ClientRequest::AddAgentPr` and
-/// `RemoveAgentPr` (`nebula pr`). The CLI asks only a daemon this new.
-pub const AGENT_PRS_PROTOCOL: u32 = 52;
-
 pub fn protocol_ranges_overlap(
     local_min: u32,
     local_current: u32,

@@ -18,10 +18,11 @@ use nebula_core::AgentId;
 use crate::registry::Daemon;
 
 /// The pull requests a `PostToolUse` payload says were just created: a
-/// Bash call whose command ran `gh pr create`, and every GitHub pull
-/// request URL in what it printed (a command that opened several, one per
-/// line, names them all). Anything else — another tool, another command,
-/// a failed create that printed no URL — is none.
+/// Bash call whose command ran `gh pr create`, and each line of what it
+/// printed to stdout that is a pull request URL and nothing else — how `gh`
+/// reports one it made. A line that only mentions a URL (a search through
+/// code that names `gh pr create`, a listing) is not a creation; nor is
+/// another tool, another command, or a create that printed no URL.
 pub fn created_prs(
     tool_name: Option<&str>,
     tool_input: Option<&serde_json::Value>,
@@ -37,19 +38,17 @@ pub fn created_prs(
     if !command.contains("gh pr create") {
         return Vec::new();
     }
-    // `stdout` on Claude's Bash response; the whole value as text covers a
-    // shape that moves it, since only well-formed PR URLs survive.
-    let printed = match tool_response {
-        Some(serde_json::Value::String(s)) => s.clone(),
+    let stdout = match tool_response {
+        Some(serde_json::Value::String(s)) => s.as_str(),
         Some(value) => value
             .get("stdout")
             .and_then(|s| s.as_str())
-            .map_or_else(|| value.to_string(), str::to_string),
+            .unwrap_or_default(),
         None => return Vec::new(),
     };
     let mut urls = Vec::new();
-    for (at, _) in printed.match_indices("https://github.com/") {
-        if let Some(url) = github_pr_url(&printed[at..]) {
+    for line in stdout.lines().map(str::trim) {
+        if let Some(url) = github_pr_url(line).filter(|url| url == line) {
             if !urls.contains(&url) {
                 urls.push(url);
             }
@@ -75,11 +74,17 @@ impl Daemon {
         Ok(())
     }
 
-    /// `nebula pr remove`: take `url` off the row's SESSION PRS.
+    /// `nebula pr remove`: take `url` off the row's SESSION PRS. A PR
+    /// SESSION's own pull request stays: it is the session's launch scope,
+    /// not an entry on the list.
     pub fn remove_session_pr(self: &Arc<Self>, id: &AgentId, url: &str) -> Result<()> {
         let Some(url) = github_pr_url(url.trim()) else {
             bail!("not a GitHub pull request URL: {url}");
         };
+        let own = self.store.agent_pr_url(id)?;
+        if own.as_deref().and_then(github_pr_url).as_deref() == Some(url.as_str()) {
+            bail!("{url} is the pull request this session was started for, so it stays");
+        }
         if !self
             .store
             .remove_agent_pr(id, &url)?
@@ -114,12 +119,11 @@ mod tests {
             ),
             ["https://github.com/o/api/pull/42"]
         );
-        // Two creates in one call name both, once each; a link's `/files`
-        // tab or query is the same pull request.
+        // Two creates in one call name both, once each.
         assert_eq!(
             created(
-                "gh pr create -R o/api && gh pr create -R o/web",
-                json!({"stdout": "https://github.com/o/api/pull/42\nhttps://github.com/o/web/pull/9?x=1\nhttps://github.com/o/api/pull/42/files"}),
+                "gh pr create -R o/api && gh pr create -R o/web && gh pr create -R o/api",
+                json!({"stdout": "https://github.com/o/api/pull/42\n  https://github.com/o/web/pull/9  \nhttps://github.com/o/api/pull/42\n"}),
             ),
             [
                 "https://github.com/o/api/pull/42",
@@ -175,6 +179,21 @@ mod tests {
             .remove_session_pr(&id, "https://github.com/o/api/pull/42")
             .unwrap();
         assert_eq!(pushed(&mut events), Some(vec![]));
+
+        // A PR SESSION's own pull request is listed but stays.
+        let own = "https://github.com/o/api/pull/9";
+        let mut row = daemon.store.get_agent(&id).unwrap().unwrap();
+        row.id = AgentId("pr-session".into());
+        daemon
+            .store
+            .insert_agent_with_launch_context(&row, false, Some(own), None)
+            .unwrap();
+        let err = daemon
+            .remove_session_pr(&row.id, own)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("stays"), "{err}");
+        assert_eq!(daemon.store.get_agent(&row.id).unwrap().unwrap().prs, [own]);
     }
 
     /// A real Claude Code `PostToolUse` payload's tool fields (captured
@@ -219,6 +238,19 @@ mod tests {
         assert!(created(
             "gh pr create",
             json!({"stdout": "https://evil.example/o/r/pull/1 https://github.com/o/r/issues/2"})
+        )
+        .is_empty());
+        // A search through code that names `gh pr create` prints lines that
+        // mention a URL; none of them is a creation.
+        assert!(created(
+            "rg \"gh pr create\" crates/",
+            json!({"stdout": "crates/x.rs:460: echo \"gh pr create\"; echo https://github.com/o/r/pull/12345\n"})
+        )
+        .is_empty());
+        // Only stdout: git's `/pull/new/branch` hint and errors are stderr.
+        assert!(created(
+            "gh pr create",
+            json!({"stdout": "", "stderr": "https://github.com/o/r/pull/7"})
         )
         .is_empty());
     }

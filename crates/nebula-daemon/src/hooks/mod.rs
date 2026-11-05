@@ -174,10 +174,6 @@ pub struct HookPayload {
     pub conversation_id: Option<String>,
     pub notification_type: Option<String>,
     pub tool_name: Option<String>,
-    /// The tool's arguments and its result on `PostToolUse` — read only for
-    /// a `gh pr create` (SESSION PRS).
-    pub tool_input: Option<serde_json::Value>,
-    pub tool_response: Option<serde_json::Value>,
     pub agent_id: Option<String>,
     /// Cursor's name for the subagent id in subagentStart/subagentStop.
     pub subagent_id: Option<String>,
@@ -204,6 +200,15 @@ impl HookPayload {
     fn subagent_id(&self) -> Option<String> {
         self.agent_id.clone().or_else(|| self.subagent_id.clone())
     }
+}
+
+/// A `PostToolUse` payload's tool arguments and result, read only for a
+/// Bash call (SESSION PRS: `session_prs::created_prs`).
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+struct ToolCall {
+    tool_input: Option<serde_json::Value>,
+    tool_response: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -449,11 +454,17 @@ async fn receive_hook(
     } else {
         None
     };
-    let created_prs = if matches!(event, HookEvent::PostToolUse { .. }) {
+    // A Bash call's arguments and output, parsed apart from the payload
+    // and only here: a tool result too deep to read must cost SESSION PRS
+    // at most, never the payload's ids (`HookPayload` stays permissive).
+    let created_prs = if matches!(event, HookEvent::PostToolUse { .. })
+        && payload.tool_name.as_deref() == Some("Bash")
+    {
+        let tool: ToolCall = serde_json::from_str(&body).unwrap_or_default();
         crate::session_prs::created_prs(
             payload.tool_name.as_deref(),
-            payload.tool_input.as_ref(),
-            payload.tool_response.as_ref(),
+            tool.tool_input.as_ref(),
+            tool.tool_response.as_ref(),
         )
     } else {
         Vec::new()
@@ -869,6 +880,38 @@ mod tests {
             .await;
             assert_eq!(status, 200);
             assert_eq!(rx.recv().await.unwrap().created_prs, expected, "{body}");
+        }
+    }
+
+    /// A tool result nested past serde_json's depth limit — an MCP answer,
+    /// say — costs SESSION PRS at most: the payload still reads, subagent
+    /// id and all.
+    #[tokio::test]
+    async fn a_too_deep_tool_result_keeps_the_rest_of_the_payload() {
+        let (env, mut rx, _) = start_hook_server(seeded_store(), None).await.unwrap();
+        for tool in ["Bash", "mcp__x__y"] {
+            let deep = format!("{}1{}", "[".repeat(200), "]".repeat(200));
+            let body = format!(
+                r#"{{"session_id":"s1","tool_name":"{tool}","agent_id":"sub-1","tool_input":{{"command":"gh pr create"}},"tool_response":{deep}}}"#
+            );
+            let (status, _) = http_post(
+                env.port,
+                "/api/hooks/claude?agentId=titled&hookEvent=PostToolUse",
+                &env.token,
+                &body,
+            )
+            .await;
+            assert_eq!(status, 200);
+            let delivery = rx.recv().await.unwrap();
+            assert_eq!(
+                delivery.event,
+                HookEvent::PostToolUse {
+                    tool_name: Some(tool.into()),
+                    subagent_id: Some("sub-1".into()),
+                },
+                "{tool}"
+            );
+            assert!(delivery.created_prs.is_empty());
         }
     }
 

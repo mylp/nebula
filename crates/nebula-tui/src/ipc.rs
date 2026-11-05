@@ -370,8 +370,9 @@ pub async fn edit_prs_for_current_agent(add: bool, url: &str) -> Result<()> {
     let Ok(stream) = try_connect(&sock).await else {
         bail!("no nebula daemon is running — list unchanged");
     };
+    // The handshake refuses a daemon older than `AddAgentPr`
+    // (MIN_COMPATIBLE_PROTOCOL 52), so no gate of its own.
     let mut conn = handshake(stream).await?;
-    require_protocol(&conn, nebula_core::AGENT_PRS_PROTOCOL, command)?;
     let req_id = ONE_SHOT_REQ_ID;
     let (id, url) = (AgentId(agent_id), url.to_string());
     let request = if add {

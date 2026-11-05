@@ -2432,9 +2432,6 @@ mod tests {
         assert!(unseen(&c), "still waiting to be read after the restart");
     }
 
-    /// RECENT PROMPTS: appended in order, pruned to the newest
-    /// `RECENT_PROMPTS_KEPT`, read back by both row paths, and nothing
-    /// for an id with no row.
     /// SESSION PRS: added once each, oldest first, removed by URL, kept
     /// across a reload; a PR SESSION's own pull request leads the list, and
     /// a column that won't parse reads as empty.
@@ -2521,6 +2518,9 @@ mod tests {
         assert!(prs(&store, &id).is_empty(), "a bad column reads as none");
     }
 
+    /// RECENT PROMPTS: appended in order, pruned to the newest
+    /// `RECENT_PROMPTS_KEPT`, read back by both row paths, and nothing
+    /// for an id with no row.
     #[test]
     fn push_prompt_keeps_the_newest_bounded_history() {
         let store = Store::open_in_memory().unwrap();
