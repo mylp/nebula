@@ -3127,6 +3127,7 @@ mod tests {
                     issue_url: None,
                     role: nebula_core::AgentRole::Worker,
                     recent_prompts: Vec::new(),
+                    prs: Vec::new(),
                 }),
             },
         );
@@ -3168,6 +3169,7 @@ mod tests {
                     issue_url: None,
                     role: nebula_core::AgentRole::Worker,
                     recent_prompts: Vec::new(),
+                    prs: Vec::new(),
                 }),
             },
         );
@@ -3221,6 +3223,7 @@ mod tests {
                     issue_url: None,
                     role: nebula_core::AgentRole::Worker,
                     recent_prompts: Vec::new(),
+                    prs: Vec::new(),
                 }),
             },
         );
@@ -8684,6 +8687,7 @@ mod tests {
                         issue_url: None,
                         role: nebula_core::AgentRole::Worker,
                         recent_prompts: Vec::new(),
+                        prs: Vec::new(),
                     }),
                 },
             );

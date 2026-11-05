@@ -112,7 +112,7 @@ impl Daemon {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     #[test]
@@ -187,7 +187,7 @@ mod tests {
     }
 
     /// A daemon over an in-memory store holding one row, `a1`.
-    fn daemon_with_one_agent() -> (Arc<Daemon>, AgentId) {
+    pub(crate) fn daemon_with_one_agent() -> (Arc<Daemon>, AgentId) {
         use crate::hooks::HookEnv;
         use crate::store::Store;
         use nebula_core::{
@@ -234,6 +234,7 @@ mod tests {
                 issue_url: None,
                 role: nebula_core::AgentRole::Worker,
                 recent_prompts: Vec::new(),
+                prs: Vec::new(),
             })
             .unwrap();
         let daemon = Daemon::new(

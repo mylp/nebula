@@ -3781,6 +3781,7 @@ mod tests {
                 issue_url: None,
                 role: nebula_core::AgentRole::Worker,
                 recent_prompts: Vec::new(),
+                prs: Vec::new(),
             })
             .collect();
         app
@@ -4999,6 +5000,7 @@ mod tests {
                     issue_url: None,
                     role: nebula_core::AgentRole::Worker,
                     recent_prompts: Vec::new(),
+                    prs: Vec::new(),
                 },
                 project: "nebula".into(),
                 branch: branch.into(),
@@ -5235,6 +5237,7 @@ mod tests {
             issue_url: None,
             role: nebula_core::AgentRole::Worker,
             recent_prompts: Vec::new(),
+            prs: Vec::new(),
         };
         let th = Theme::by_name("amber");
         let mut app = App::new();
@@ -5344,6 +5347,7 @@ mod tests {
                 issue_url: None,
                 role: nebula_core::AgentRole::Worker,
                 recent_prompts: Vec::new(),
+                prs: Vec::new(),
             },
             project: "nebula".into(),
             branch: "feat-x".into(),
@@ -5400,6 +5404,7 @@ mod tests {
                 issue_url: None,
                 role: nebula_core::AgentRole::Worker,
                 recent_prompts: Vec::new(),
+                prs: Vec::new(),
             },
             project: "nebula".into(),
             branch: "feat-x".into(),
@@ -5551,6 +5556,7 @@ mod tests {
                     issue_url: None,
                     role: nebula_core::AgentRole::Worker,
                     recent_prompts: Vec::new(),
+                    prs: Vec::new(),
                 },
                 project: "nebula".into(),
                 branch: "main".into(),

@@ -10,20 +10,28 @@ use std::path::PathBuf;
 ///
 /// Bump on every protocol change. Additive changes keep
 /// [`MIN_COMPATIBLE_PROTOCOL`] where it is; breaking changes bump both.
-pub const PROTOCOL_VERSION: u32 = 51;
+pub const PROTOCOL_VERSION: u32 = 52;
 
 /// Oldest IPC protocol this build can safely talk to.
 ///
 /// Compatibility is a range overlap: two peers can talk when each peer's
 /// `[MIN_COMPATIBLE_PROTOCOL, PROTOCOL_VERSION]` range includes at least one
 /// version the other peer also supports.
-pub const MIN_COMPATIBLE_PROTOCOL: u32 = 49;
+///
+/// 52: `Agent` grew `prs` (SESSION PRS). Frames are positional MessagePack,
+/// and an older decoder refuses a struct with a field it doesn't know
+/// (`LengthMismatch`), so every peer moves together.
+pub const MIN_COMPATIBLE_PROTOCOL: u32 = 52;
 
 /// First protocol whose daemon answers `ClientRequest::CheckWorktree`. A
 /// client asks only a daemon at least this new; an older one is never sent
 /// a request it could not decode, and its delete confirm simply goes
 /// without the check.
 pub const CHECK_WORKTREE_PROTOCOL: u32 = 51;
+
+/// First protocol whose daemon answers `ClientRequest::AddAgentPr` and
+/// `RemoveAgentPr` (`nebula pr`). The CLI asks only a daemon this new.
+pub const AGENT_PRS_PROTOCOL: u32 = 52;
 
 pub fn protocol_ranges_overlap(
     local_min: u32,
@@ -276,6 +284,21 @@ pub enum ClientRequest {
         req_id: u64,
         id: AgentId,
         name: String,
+    },
+    /// `nebula pr add <url>` inside a session: put a pull request on the
+    /// row's SESSION PRS. `url` must be a GitHub pull request URL; one
+    /// already listed is an Ack, not a duplicate.
+    AddAgentPr {
+        req_id: u64,
+        id: AgentId,
+        url: String,
+    },
+    /// `nebula pr remove <url>`: take a pull request off the row's
+    /// SESSION PRS. One that isn't listed is an Error.
+    RemoveAgentPr {
+        req_id: u64,
+        id: AgentId,
+        url: String,
     },
     /// `nebula worktree <name>`, run by the agent from inside its own
     /// session: create the worktree `branch` under the agent's project (or
@@ -603,6 +626,9 @@ pub struct SessionSummary {
     pub alive: bool,
     /// One-line recent context: newest user prompt when known, else title.
     pub summary: String,
+    /// The row's SESSION PRS (`Agent::prs`); empty for a terminal.
+    #[serde(default)]
+    pub prs: Vec<String>,
 }
 
 /// Daemon-side half of the metrics modal's data; the client stacks its own

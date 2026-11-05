@@ -147,6 +147,10 @@ pub struct HookDelivery {
     pub prompt: Option<String>,
     /// One unambiguous PR in a foreground completed assistant answer.
     pub reported_pr: Option<String>,
+    /// The pull requests a `gh pr create` just printed, for the row's
+    /// SESSION PRS (`session_prs::created_prs`). Only a `PostToolUse`
+    /// carries any; a subagent's counts, its work being the session's.
+    pub created_prs: Vec<String>,
 }
 
 /// Permissive payload: every field optional, unknown fields ignored. Hook
@@ -170,6 +174,10 @@ pub struct HookPayload {
     pub conversation_id: Option<String>,
     pub notification_type: Option<String>,
     pub tool_name: Option<String>,
+    /// The tool's arguments and its result on `PostToolUse` — read only for
+    /// a `gh pr create` (SESSION PRS).
+    pub tool_input: Option<serde_json::Value>,
+    pub tool_response: Option<serde_json::Value>,
     pub agent_id: Option<String>,
     /// Cursor's name for the subagent id in subagentStart/subagentStop.
     pub subagent_id: Option<String>,
@@ -441,6 +449,15 @@ async fn receive_hook(
     } else {
         None
     };
+    let created_prs = if matches!(event, HookEvent::PostToolUse { .. }) {
+        crate::session_prs::created_prs(
+            payload.tool_name.as_deref(),
+            payload.tool_input.as_ref(),
+            payload.tool_response.as_ref(),
+        )
+    } else {
+        Vec::new()
+    };
     let _ = state
         .tx
         .send(HookDelivery {
@@ -451,6 +468,7 @@ async fn receive_hook(
             transcript,
             prompt,
             reported_pr,
+            created_prs,
         })
         .await;
 
@@ -558,6 +576,7 @@ mod tests {
             issue_url: None,
             role: nebula_core::AgentRole::Worker,
             recent_prompts: Vec::new(),
+            prs: Vec::new(),
         };
         store
             .insert_agent_with_auto_title(&agent("pending"), true)
@@ -817,6 +836,40 @@ mod tests {
         assert_eq!(status, 200);
         let delivery = rx.recv().await.unwrap();
         assert!(delivery.cwd.is_none(), "subagent cwd: {:?}", delivery.cwd);
+    }
+
+    /// A Claude `gh pr create` — the session's or a subagent's — carries
+    /// the pull requests it printed to the row's SESSION PRS; any other
+    /// Bash call carries none.
+    #[tokio::test]
+    async fn a_gh_pr_create_carries_its_pull_request_to_the_row() {
+        let (env, mut rx, _) = start_hook_server(seeded_store(), None).await.unwrap();
+        for (extra, command, expected) in [
+            (
+                "",
+                "gh pr create --fill",
+                vec!["https://github.com/o/api/pull/42"],
+            ),
+            (
+                r#","agent_id":"sub-1""#,
+                "gh pr create --fill",
+                vec!["https://github.com/o/api/pull/42"],
+            ),
+            ("", "gh pr view 42", vec![]),
+        ] {
+            let body = format!(
+                r#"{{"session_id":"s1","tool_name":"Bash","tool_input":{{"command":"{command}"}},"tool_response":{{"stdout":"https://github.com/o/api/pull/42\n","stderr":""}}{extra}}}"#
+            );
+            let (status, _) = http_post(
+                env.port,
+                "/api/hooks/claude?agentId=titled&hookEvent=PostToolUse",
+                &env.token,
+                &body,
+            )
+            .await;
+            assert_eq!(status, 200);
+            assert_eq!(rx.recv().await.unwrap().created_prs, expected, "{body}");
+        }
     }
 
     #[tokio::test]

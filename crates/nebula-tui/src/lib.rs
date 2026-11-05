@@ -92,6 +92,12 @@ pub fn run_rename(title: String, mode: RenameMode) -> Result<()> {
     runtime()?.block_on(ipc::rename_current_agent(&title, mode))
 }
 
+/// `nebula pr add|remove <url>` — the current agent session's SESSION PRS
+/// (see `ipc::edit_prs_for_current_agent`).
+pub fn run_pr(add: bool, url: String) -> Result<()> {
+    runtime()?.block_on(ipc::edit_prs_for_current_agent(add, &url))
+}
+
 /// `nebula worktree [name] [--base <ref>]` — move the current agent session
 /// into a worktree of its project (see `ipc::enter_worktree_for_current_agent`).
 pub fn run_worktree(name: String, base: Option<String>) -> Result<()> {

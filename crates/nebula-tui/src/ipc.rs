@@ -359,6 +359,39 @@ pub async fn rename_current_agent(title: &str, mode: RenameMode) -> Result<()> {
     Ok(())
 }
 
+/// One-shot client for `nebula pr add|remove <url>`, run from inside an
+/// agent session: put a pull request on the session's SESSION PRS, or take
+/// it off. Never spawns a daemon. A daemon refusal (not a PR URL, not on
+/// the list) is a nonzero exit the model reads.
+pub async fn edit_prs_for_current_agent(add: bool, url: &str) -> Result<()> {
+    let command = if add { "pr add" } else { "pr remove" };
+    let agent_id = current_agent_id(command)?;
+    let sock = paths::socket_path();
+    let Ok(stream) = try_connect(&sock).await else {
+        bail!("no nebula daemon is running — list unchanged");
+    };
+    let mut conn = handshake(stream).await?;
+    require_protocol(&conn, nebula_core::AGENT_PRS_PROTOCOL, command)?;
+    let req_id = ONE_SHOT_REQ_ID;
+    let (id, url) = (AgentId(agent_id), url.to_string());
+    let request = if add {
+        ClientRequest::AddAgentPr { req_id, id, url }
+    } else {
+        ClientRequest::RemoveAgentPr { req_id, id, url }
+    };
+    write_frame(&mut conn.stream, &request).await?;
+    await_ack(&mut conn, req_id).await?;
+    println!(
+        "{}",
+        if add {
+            "on this session's pull requests"
+        } else {
+            "off this session's pull requests"
+        }
+    );
+    Ok(())
+}
+
 /// CLI: `nebula spawn "<task>" [--kind <claude|codex|cursor>] [--worktree
 /// <branch> [--base <ref>]]` from inside an agent session — ask the daemon
 /// to start a new agent beside this one, in the same worktree or in the
@@ -604,7 +637,7 @@ pub async fn ask_session(
 fn print_session_summaries(sessions: &[SessionSummary]) {
     for session in sessions {
         println!(
-            "{} name={} project={} branch={} worktree={} harness={} status={}{} summary={}",
+            "{} name={} project={} branch={} worktree={} harness={} status={}{}{} summary={}",
             session.id,
             shell_word(&session.name),
             shell_word(&session.project),
@@ -613,6 +646,11 @@ fn print_session_summaries(sessions: &[SessionSummary]) {
             session.harness,
             session.status,
             if session.alive { " alive" } else { "" },
+            if session.prs.is_empty() {
+                String::new()
+            } else {
+                format!(" prs={}", session.prs.join(","))
+            },
             shell_word(&session.summary)
         );
     }

@@ -143,6 +143,17 @@ pub(crate) enum Command {
         #[arg(long)]
         force: bool,
     },
+    /// Keep this session's list of pull requests.
+    ///
+    /// Run from inside a nebula agent session. A Claude session's own
+    /// `gh pr create` lands on the list by itself; `add` is for a pull
+    /// request the session took on instead — pushed to, reviewed, fixed.
+    /// `nebula sessions` shows each session's list.
+    #[command(after_help = PR_EXAMPLES)]
+    Pr {
+        #[command(subcommand)]
+        command: PrCommand,
+    },
     /// Move this session into a worktree of its project.
     ///
     /// Run from inside a nebula agent session; agents run it when you ask them
@@ -514,6 +525,11 @@ Examples:
   nebula rename Fix Login Redirect   title this session
   nebula rename --force Auth Rework  replace a title already set";
 
+const PR_EXAMPLES: &str = "\
+Examples:
+  nebula pr add https://github.com/o/r/pull/42     put a pull request on this session's list
+  nebula pr remove https://github.com/o/r/pull/42  take it off";
+
 const WORKTREE_EXAMPLES: &str = "\
 Examples:
   nebula worktree fix-login-redirect  branch off the configured base and move there
@@ -599,6 +615,20 @@ const UPGRADE_EXAMPLES: &str = "\
 Examples:
   nebula upgrade                   install the latest release
   nebula upgrade --force           do it over a local cargo build";
+
+#[derive(Subcommand)]
+pub(crate) enum PrCommand {
+    /// Put a pull request on this session's list.
+    Add {
+        /// The pull request's GitHub URL.
+        url: String,
+    },
+    /// Take a pull request off this session's list.
+    Remove {
+        /// The pull request's GitHub URL.
+        url: String,
+    },
+}
 
 #[derive(Subcommand)]
 pub(crate) enum ConfigCommand {

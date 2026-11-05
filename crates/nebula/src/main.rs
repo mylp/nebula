@@ -48,6 +48,10 @@ fn main() -> Result<()> {
             };
             nebula_tui::run_rename(title.join(" "), mode)
         }
+        Some(Command::Pr { command }) => match command {
+            cli::PrCommand::Add { url } => nebula_tui::run_pr(true, url),
+            cli::PrCommand::Remove { url } => nebula_tui::run_pr(false, url),
+        },
         Some(Command::Worktree { name, base }) => nebula_tui::run_worktree(name.join(" "), base),
         Some(Command::Spawn {
             task,

@@ -10,7 +10,7 @@ use nebula_core::{
     TerminalId, TerminalTab, Worktree, WorktreeId, RECENT_PROMPTS_KEPT,
 };
 use parking_lot::Mutex;
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use std::path::{Path, PathBuf};
 
 const MIGRATIONS: &[&str] = &[
@@ -332,6 +332,12 @@ const MIGRATIONS: &[&str] = &[
     "
     ALTER TABLE agents ADD COLUMN role TEXT NOT NULL DEFAULT 'worker';
     ",
+    // 30: SESSION PRS — the pull requests a session made or took on, as a
+    // JSON array of canonical GitHub URLs (oldest first). A short list on
+    // the row, like RECENT PROMPTS; NULL (none) for every existing row.
+    "
+    ALTER TABLE agents ADD COLUMN prs TEXT;
+    ",
 ];
 
 pub struct Store {
@@ -649,6 +655,63 @@ impl Store {
             params![id.as_str(), json],
         )?;
         Ok(true)
+    }
+
+    /// Put `url` (canonical) on the row's SESSION PRS. `Ok(None)` for a
+    /// row that isn't there; `Ok(Some(false))` when it was already listed.
+    pub fn add_agent_pr(&self, id: &AgentId, url: &str) -> Result<Option<bool>> {
+        self.edit_agent_prs(id, |prs| {
+            if prs.iter().any(|u| u == url) {
+                return false;
+            }
+            prs.push(url.to_string());
+            true
+        })
+    }
+
+    /// Take `url` off the row's SESSION PRS. `Ok(None)` for a row that
+    /// isn't there; `Ok(Some(false))` when it wasn't listed.
+    pub fn remove_agent_pr(&self, id: &AgentId, url: &str) -> Result<Option<bool>> {
+        self.edit_agent_prs(id, |prs| {
+            let before = prs.len();
+            prs.retain(|u| u != url);
+            prs.len() != before
+        })
+    }
+
+    /// Read-modify-write of the `prs` column under the connection lock;
+    /// `edit` says whether it changed anything, and only a change writes.
+    fn edit_agent_prs(
+        &self,
+        id: &AgentId,
+        edit: impl FnOnce(&mut Vec<String>) -> bool,
+    ) -> Result<Option<bool>> {
+        let conn = self.conn.lock();
+        let stored: Option<Option<String>> = conn
+            .query_row(
+                "SELECT prs FROM agents WHERE id = ?1",
+                params![id.as_str()],
+                |r| r.get(0),
+            )
+            .optional()?;
+        let Some(stored) = stored else {
+            return Ok(None);
+        };
+        let mut prs: Vec<String> = stored
+            .as_deref()
+            .and_then(|j| serde_json::from_str(j).ok())
+            .unwrap_or_default();
+        if !edit(&mut prs) {
+            return Ok(Some(false));
+        }
+        let json = (!prs.is_empty())
+            .then(|| serde_json::to_string(&prs))
+            .transpose()?;
+        conn.execute(
+            "UPDATE agents SET prs = ?2 WHERE id = ?1",
+            params![id.as_str(), json],
+        )?;
+        Ok(Some(true))
     }
 
     /// Empty the row's RECENT PROMPTS (NULL is the empty history).
@@ -1130,7 +1193,7 @@ const WORKTREE_COLUMNS: &str = "id, project_id, path, branch, is_main, sort_orde
 const AGENT_COLUMNS: &str = "id, worktree_id, name, status, archived, kind, \
                              claude_session_id, sort_order, status_changed_at, model, effort, \
                              archived_at, unseen, cloud_session_id, recent_prompts, custom_harness, \
-                             issue_url, role";
+                             issue_url, role, prs, pr_url";
 const TERMINAL_COLUMNS: &str = "id, worktree_id, name, sort_order, run_command";
 const LINK_COLUMNS: &str = "id, worktree_id, url, sort_order";
 
@@ -1181,7 +1244,31 @@ fn row_to_agent(r: &rusqlite::Row) -> rusqlite::Result<Agent> {
             .unwrap_or_default(),
         recent_prompts: parse_prompts(r.get::<_, Option<String>>(14)?.as_deref()),
         custom_harness: r.get(15)?,
+        prs: session_prs(
+            r.get::<_, Option<String>>(19)?.as_deref(),
+            r.get::<_, Option<String>>(18)?.as_deref(),
+        ),
     })
+}
+
+/// SESSION PRS as a row reads them: a PR SESSION's own pull request
+/// (`pr_url`) first, then the `prs` column's list. A column that will not
+/// parse reads as empty rather than failing every row load, as
+/// `recent_prompts` does.
+fn session_prs(pr_url: Option<&str>, json: Option<&str>) -> Vec<String> {
+    let mut prs: Vec<String> = pr_url
+        .and_then(nebula_core::github_url::github_pr_url)
+        .into_iter()
+        .collect();
+    let stored: Vec<String> = json
+        .and_then(|j| serde_json::from_str(j).ok())
+        .unwrap_or_default();
+    for url in stored {
+        if !prs.contains(&url) {
+            prs.push(url);
+        }
+    }
+    prs
 }
 
 /// A stored kind string back into its kind. Bare `"custom"` never parses
@@ -1279,6 +1366,7 @@ mod tests {
             issue_url: None,
             role: nebula_core::AgentRole::Worker,
             recent_prompts: Vec::new(),
+            prs: Vec::new(),
         };
         let pr_url = "https://github.com/AgentSystemLabs/nebula/pull/42";
         store
@@ -1304,6 +1392,7 @@ mod tests {
             issue_url: None,
             role: nebula_core::AgentRole::Worker,
             recent_prompts: Vec::new(),
+            prs: Vec::new(),
         };
         store.insert_agent(&codex_agent).unwrap();
         let cursor_agent = Agent {
@@ -1326,6 +1415,7 @@ mod tests {
             issue_url: None,
             role: nebula_core::AgentRole::Worker,
             recent_prompts: Vec::new(),
+            prs: Vec::new(),
         };
         store.insert_agent(&cursor_agent).unwrap();
         let issue_url = "https://github.com/AgentSystemLabs/nebula/issues/15";
@@ -1349,6 +1439,7 @@ mod tests {
             issue_url: None,
             role: nebula_core::AgentRole::Worker,
             recent_prompts: Vec::new(),
+            prs: Vec::new(),
         };
         store
             .insert_agent_with_launch_context(&issue_agent, true, None, Some(issue_url))
@@ -1392,6 +1483,7 @@ mod tests {
             issue_url: None,
             role: nebula_core::AgentRole::Worker,
             recent_prompts: Vec::new(),
+            prs: Vec::new(),
         };
         store.insert_agent(&custom).unwrap();
         let (_, _, reloaded, _) = store.load_tree().unwrap();
@@ -1933,6 +2025,7 @@ mod tests {
             issue_url: None,
             role: nebula_core::AgentRole::Worker,
             recent_prompts: Vec::new(),
+            prs: Vec::new(),
         };
 
         // Default-named session: pending until the agent titles it, and the
@@ -2022,6 +2115,7 @@ mod tests {
                     issue_url: None,
                     role: nebula_core::AgentRole::Worker,
                     recent_prompts: Vec::new(),
+                    prs: Vec::new(),
                 },
                 true,
             )
@@ -2152,6 +2246,7 @@ mod tests {
                     issue_url: None,
                     role: nebula_core::AgentRole::Worker,
                     recent_prompts: Vec::new(),
+                    prs: Vec::new(),
                 })
                 .unwrap();
         }
@@ -2217,6 +2312,7 @@ mod tests {
                     issue_url: None,
                     role: nebula_core::AgentRole::Worker,
                     recent_prompts: Vec::new(),
+                    prs: Vec::new(),
                 })
                 .unwrap();
         }
@@ -2279,6 +2375,7 @@ mod tests {
                 issue_url: None,
                 role: nebula_core::AgentRole::Worker,
                 recent_prompts: Vec::new(),
+                prs: Vec::new(),
             };
             store.insert_agent(&agent).unwrap();
             agent.id
@@ -2338,6 +2435,92 @@ mod tests {
     /// RECENT PROMPTS: appended in order, pruned to the newest
     /// `RECENT_PROMPTS_KEPT`, read back by both row paths, and nothing
     /// for an id with no row.
+    /// SESSION PRS: added once each, oldest first, removed by URL, kept
+    /// across a reload; a PR SESSION's own pull request leads the list, and
+    /// a column that won't parse reads as empty.
+    #[test]
+    fn session_prs_add_once_remove_and_lead_with_the_pr_sessions_own() {
+        let store = Store::open_in_memory().unwrap();
+        store
+            .insert_project(&Project {
+                id: ProjectId("p1".into()),
+                name: "p".into(),
+                repo_path: "/tmp/p".into(),
+                sort_order: 0,
+            })
+            .unwrap();
+        store
+            .insert_worktree(&Worktree {
+                id: WorktreeId("w1".into()),
+                project_id: ProjectId("p1".into()),
+                path: "/tmp/p".into(),
+                branch: "main".into(),
+                is_main: true,
+                sort_order: 0,
+            })
+            .unwrap();
+        let agent = |id: &str| Agent {
+            id: AgentId(id.into()),
+            worktree_id: WorktreeId("w1".into()),
+            name: id.into(),
+            status: AgentStatus::Fresh,
+            archived: false,
+            archived_at: 0,
+            unseen: false,
+            kind: AgentKind::Claude,
+            custom_harness: None,
+            model: None,
+            effort: None,
+            session_id: None,
+            cloud_session_id: None,
+            sort_order: 0,
+            status_changed_at: 0,
+            alive: false,
+            issue_url: None,
+            role: nebula_core::AgentRole::Worker,
+            recent_prompts: Vec::new(),
+            prs: Vec::new(),
+        };
+        let (a, b) = (
+            "https://github.com/o/api/pull/7",
+            "https://github.com/o/web/pull/9",
+        );
+        let id = AgentId("a1".into());
+        store.insert_agent(&agent("a1")).unwrap();
+        let prs = |store: &Store, id: &AgentId| store.get_agent(id).unwrap().unwrap().prs;
+        assert!(prs(&store, &id).is_empty());
+        assert_eq!(store.add_agent_pr(&id, a).unwrap(), Some(true));
+        assert_eq!(store.add_agent_pr(&id, b).unwrap(), Some(true));
+        assert_eq!(store.add_agent_pr(&id, a).unwrap(), Some(false), "once");
+        assert_eq!(prs(&store, &id), [a, b], "oldest first");
+        assert_eq!(store.load_tree().unwrap().2[0].prs, [a, b]);
+        assert_eq!(store.remove_agent_pr(&id, a).unwrap(), Some(true));
+        assert_eq!(store.remove_agent_pr(&id, a).unwrap(), Some(false));
+        assert_eq!(prs(&store, &id), [b]);
+        assert_eq!(store.remove_agent_pr(&id, b).unwrap(), Some(true));
+        assert!(prs(&store, &id).is_empty());
+        let ghost = AgentId("ghost".into());
+        assert_eq!(store.add_agent_pr(&ghost, a).unwrap(), None);
+        assert_eq!(store.remove_agent_pr(&ghost, a).unwrap(), None);
+
+        // A PR SESSION: its own pull request first, never twice.
+        let pr_session = AgentId("a2".into());
+        store
+            .insert_agent_with_launch_context(&agent("a2"), false, Some(b), None)
+            .unwrap();
+        assert_eq!(prs(&store, &pr_session), [b]);
+        store.add_agent_pr(&pr_session, a).unwrap();
+        store.add_agent_pr(&pr_session, b).unwrap();
+        assert_eq!(prs(&store, &pr_session), [b, a]);
+
+        store
+            .conn
+            .lock()
+            .execute("UPDATE agents SET prs = 'not json' WHERE id = 'a1'", [])
+            .unwrap();
+        assert!(prs(&store, &id).is_empty(), "a bad column reads as none");
+    }
+
     #[test]
     fn push_prompt_keeps_the_newest_bounded_history() {
         let store = Store::open_in_memory().unwrap();
@@ -2380,6 +2563,7 @@ mod tests {
                 issue_url: None,
                 role: nebula_core::AgentRole::Worker,
                 recent_prompts: Vec::new(),
+                prs: Vec::new(),
             })
             .unwrap();
         let entry = |n: usize| PromptEntry {

@@ -275,6 +275,13 @@ pub struct Agent {
     /// the bottom. Empty for every row that predates the capture.
     #[serde(default)]
     pub recent_prompts: Vec<PromptEntry>,
+    /// SESSION PRS: the pull requests this session made or took on, as
+    /// canonical GitHub URLs, oldest first — what it opened with `gh pr
+    /// create` (the `PostToolUse` hook), what it named with `nebula pr add`,
+    /// and a PR SESSION's own pull request first. Empty for every row that
+    /// predates the capture.
+    #[serde(default)]
+    pub prs: Vec<String>,
 }
 
 impl Agent {

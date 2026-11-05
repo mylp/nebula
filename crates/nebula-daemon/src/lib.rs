@@ -16,6 +16,7 @@ pub mod reported_pr;
 pub mod server;
 pub mod session_context;
 pub mod session_model;
+pub mod session_prs;
 pub mod session_title;
 pub mod sibling;
 pub mod status;
@@ -196,6 +197,7 @@ async fn serve(opts: DaemonOpts) -> Result<()> {
                 transcript,
                 prompt,
                 reported_pr,
+                created_prs,
             }) = hook_rx.recv().await
             {
                 let captures_session = event.captures_session();
@@ -220,6 +222,11 @@ async fn serve(opts: DaemonOpts) -> Result<()> {
                         session_id.as_deref(),
                         captures_session,
                     );
+                }
+                for url in created_prs {
+                    if let Err(error) = daemon.add_session_pr(&agent_id, &url) {
+                        tracing::warn!(%error, "could not record a created PR");
+                    }
                 }
                 if let Some(url) = reported_pr {
                     if let Err(error) = daemon.remember_reported_pr(&agent_id, &url) {

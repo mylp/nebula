@@ -235,6 +235,7 @@ fn agent_summary(
         status: public_status(agent.status).to_string(),
         alive: agent.alive,
         summary,
+        prs: agent.prs,
     })
 }
 
@@ -263,6 +264,7 @@ fn terminal_summary(
         status: if terminal.alive { "running" } else { "idle" }.into(),
         alive: terminal.alive,
         summary,
+        prs: Vec::new(),
     })
 }
 
@@ -613,6 +615,7 @@ mod tests {
             sort_order: 0,
             alive: false,
             recent_prompts: Vec::new(),
+            prs: Vec::new(),
         }
     }
 

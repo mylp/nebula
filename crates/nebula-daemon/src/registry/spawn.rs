@@ -147,6 +147,7 @@ impl Daemon {
             issue_url: issue_url.clone(),
             role,
             recent_prompts: Vec::new(),
+            prs: Vec::new(),
         };
         // A cloud task is the session's first prompt, and the only one
         // nebula will ever see typed for it: the agent runs in the sandbox,

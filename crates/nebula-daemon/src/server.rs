@@ -336,6 +336,20 @@ impl ClientConnection {
                 reply_done(&self.out_tx, req_id, result).await;
                 Ok(true)
             }
+            ClientRequest::AddAgentPr { req_id, id, url } => {
+                let result = self
+                    .blocking_daemon(move |daemon| daemon.add_session_pr(&id, &url))
+                    .await;
+                reply_done(&self.out_tx, req_id, result).await;
+                Ok(true)
+            }
+            ClientRequest::RemoveAgentPr { req_id, id, url } => {
+                let result = self
+                    .blocking_daemon(move |daemon| daemon.remove_session_pr(&id, &url))
+                    .await;
+                reply_done(&self.out_tx, req_id, result).await;
+                Ok(true)
+            }
             ClientRequest::SpawnSiblingAgent {
                 req_id,
                 id,
