@@ -647,7 +647,7 @@ const LIST_QUERY: &str = "query($owner: String!, $repo: String!, $limit: Int!) {
     repository(owner: $owner, name: $repo) { \
     pullRequests(states: OPEN, first: $limit, orderBy: {field: CREATED_AT, direction: DESC}) { \
     nodes { number url title isDraft headRefName baseRefName isCrossRepository \
-    headRepositoryOwner { login } mergeable \
+    headRepositoryOwner { login } mergeable viewerDidAuthor \
     commits(last: 1) { nodes { commit { statusCheckRollup { state } } } } } } } }";
 
 /// One row of a project's open-pull-request list.
@@ -674,6 +674,10 @@ pub struct OpenPr {
     /// a branch while another open PR uses it as its base.
     #[serde(default)]
     pub base: String,
+    /// Opened by you (GitHub's `viewerDidAuthor`) — what the PULL REQUESTS
+    /// MODAL's `Ctrl+t` narrows the list to.
+    #[serde(default)]
+    pub mine: bool,
 }
 
 /// `#42 title`, or `#42` alone for an untitled one — how a pull request
@@ -837,6 +841,7 @@ pub(crate) fn parse_list(json: &str) -> Option<Vec<OpenPr>> {
                     health: health(v),
                     head: checkout_branch(v),
                     base: str_at(v, "baseRefName"),
+                    mine: bool_at(v, "viewerDidAuthor"),
                 })
             })
             .collect(),
@@ -1470,6 +1475,7 @@ mod tests {
             health: Default::default(),
             head: String::new(),
             base: "main".into(),
+            mine: false,
         };
         let mut list = vec![row(42, true), row(40, false), row(31, true), row(30, false)];
         drafts_last(&mut list);
@@ -1571,6 +1577,31 @@ mod tests {
         assert!(
             prs[1].head.is_empty(),
             "a row `gh` gave no branch for still lists; only its PR SESSION is refused"
+        );
+    }
+
+    /// `viewerDidAuthor` is what marks a row yours; a row without it — or
+    /// one the cache saved before the field existed — is someone else's.
+    #[test]
+    fn a_list_row_is_yours_when_github_says_you_authored_it() {
+        assert!(LIST_QUERY.contains("viewerDidAuthor"));
+        let prs = parse_list(&list_answer(
+            r#"[
+              {"number":1,"title":"Mine","url":"https://github.com/o/r/pull/1","isDraft":false,"viewerDidAuthor":true},
+              {"number":2,"title":"Theirs","url":"https://github.com/o/r/pull/2","isDraft":false,"viewerDidAuthor":false},
+              {"number":3,"title":"Unsaid","url":"https://github.com/o/r/pull/3","isDraft":false}
+            ]"#,
+        ))
+        .expect("parsed");
+        let mine: Vec<bool> = prs.iter().map(|pr| pr.mine).collect();
+        assert_eq!(mine, [true, false, false]);
+        let cached: OpenPr = serde_json::from_str(
+            r#"{"number":4,"title":"Old","url":"https://github.com/o/r/pull/4","is_draft":false,"head":"b"}"#,
+        )
+        .unwrap();
+        assert!(
+            !cached.mine,
+            "a cached row from an older build reads as not yours"
         );
     }
 

@@ -1844,6 +1844,7 @@ pub(super) fn seed_open_prs(app: &mut App, prs: &[(u64, &str)]) {
                     is_draft: false,
                     health: Default::default(),
                     base: "main".into(),
+                    mine: false,
                     head: format!("pr-{number}-head"),
                 })
                 .collect(),
@@ -1996,6 +1997,7 @@ fn the_cursor_follows_a_checkout_that_moves_under_or_out_from_under_its_pull_req
         is_draft: false,
         health: Default::default(),
         base: "main".into(),
+        mine: false,
         head: "pr-7-head".into(),
     }];
 
@@ -2111,6 +2113,7 @@ fn the_open_pr_list_backs_off_when_empty_and_survives_a_failed_call() {
         is_draft: false,
         health: Default::default(),
         base: "main".into(),
+        mine: false,
         head: "attach-links".into(),
     }];
     note_open_prs_answer(&mut app, pid.clone(), Some(found.clone()), &mut Vec::new());
@@ -2450,6 +2453,7 @@ fn palette_pull_request_rows_say_draft_or_ready_for_review_and_follow_the_refres
                 is_draft,
                 health: Default::default(),
                 base: "main".into(),
+                mine: false,
                 head: format!("pr-{number}-head"),
             })
             .collect();
@@ -2616,6 +2620,7 @@ fn a_merged_pull_request_leaves_the_list_on_the_next_refresh() {
                 is_draft,
                 health: Default::default(),
                 base: "main".into(),
+                mine: false,
                 head: format!("pr-{number}-head"),
             })
             .collect();
@@ -2678,6 +2683,7 @@ fn the_cursor_follows_its_pull_request_across_a_reorder() {
             is_draft: false,
             health: Default::default(),
             base: "main".into(),
+            mine: false,
             head: "brand-new".into(),
         },
         crate::pull_request::OpenPr {
@@ -2687,6 +2693,7 @@ fn the_cursor_follows_its_pull_request_across_a_reorder() {
             is_draft: false,
             health: Default::default(),
             base: "main".into(),
+            mine: false,
             head: "number-lines".into(),
         },
         crate::pull_request::OpenPr {
@@ -2696,6 +2703,7 @@ fn the_cursor_follows_its_pull_request_across_a_reorder() {
             is_draft: false,
             health: Default::default(),
             base: "main".into(),
+            mine: false,
             head: "attach-links".into(),
         },
     ];
@@ -2811,6 +2819,7 @@ fn a_pr(number: u64, title: &str, is_draft: bool) -> crate::pull_request::OpenPr
         is_draft,
         health: Default::default(),
         base: "main".into(),
+        mine: false,
         head: format!("pr-{number}-head"),
     }
 }
@@ -3670,6 +3679,7 @@ fn cached_open(number: u64) -> crate::pull_request::OpenPr {
         is_draft: false,
         health: Default::default(),
         base: "main".into(),
+        mine: false,
         head: format!("head-{number}"),
     }
 }
@@ -6642,6 +6652,7 @@ fn s_types_in_the_pickers_and_jumps_from_a_pr_row_menu() {
             is_draft: false,
             health: Default::default(),
             base: "main".into(),
+            mine: false,
             head: "pr-7-head".into(),
         };
         let mut items = crate::agent_picker::pr_session_menu_rows(worktree, &pr);
@@ -16124,6 +16135,7 @@ fn jumping_to_another_projects_pr_selects_it() {
                 is_draft: false,
                 health: Default::default(),
                 base: "main".into(),
+                mine: false,
                 head: "hush".into(),
             }],
             at: now,

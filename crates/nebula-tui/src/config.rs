@@ -1286,6 +1286,10 @@ pub struct Config {
     /// `Ctrl+s` inside the viewer flips it and writes it back here. A
     /// pane too narrow for two columns reads inline either way.
     pub diff_inline: bool,
+    /// The PULL REQUESTS MODAL (`v`) lists only the pull requests you
+    /// opened. Off by default (everyone's); `Ctrl+t` inside the modal
+    /// flips it and writes it back here.
+    pub pr_list_mine: bool,
     /// RETIRED with the line counts always drawn. Through 0.37 the **Card
     /// line counts** SETTING (Settings → Appearance, off by default)
     /// switched each card's `+3 files` to `+3 files +120 -45`. Every card
@@ -1633,6 +1637,7 @@ impl Default for Config {
             hide_draft_prs: false,
             source_control_graph: false,
             diff_inline: false,
+            pr_list_mine: false,
             card_line_changes: false,
             skip_session_naming: false,
             confirm_on_archive: false,

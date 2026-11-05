@@ -367,6 +367,7 @@ mod tests {
             health: Default::default(),
             head: format!("head-{number}"),
             base: "main".into(),
+            mine: false,
         }
     }
 

@@ -2417,6 +2417,7 @@ mod tests {
                     health: Default::default(),
                     head: "main".into(),
                     base: "dev".into(),
+                    mine: false,
                 }],
                 at: std::time::Instant::now(),
                 due: std::time::Instant::now(),

@@ -19,7 +19,8 @@
 //! closes. So the verbs are chords: `Ctrl+c` or `Ctrl+y` leaves a comment (the
 //! COMMENT BOX the group row's `y` opens, which comes back to the modal
 //! on its row), `Ctrl+g` reads the whole diff, `Ctrl+o` opens the pull
-//! request in the browser, `Ctrl+r` asks GitHub again.
+//! request in the browser, `Ctrl+r` asks GitHub again, and `Ctrl+t` lists
+//! only the pull requests you opened, or everyone's again.
 //!
 //! Nothing is fetched here the panels do not already keep. The rows are
 //! the project's open list (`App::open_prs`) — kept warm on the OPEN PRS
@@ -106,6 +107,10 @@ pub struct PullRequestsView {
     /// second click on the same row inside the DOUBLE-CLICK window opens it
     /// in the browser (`event_loop::is_double_click`).
     pub last_row_click: Option<(std::time::Instant, u64)>,
+    /// Only your pull requests are listed (`Ctrl+t`, the `pr_list_mine`
+    /// SETTING). Every row index here — `selected`, the filter's — is into
+    /// that narrowed list.
+    pub mine: bool,
 }
 
 impl PullRequestsView {
@@ -124,6 +129,7 @@ impl PullRequestsView {
             browser_area: Rect::default(),
             list: FilterList::default(),
             last_row_click: None,
+            mine: false,
         }
     }
 
@@ -167,8 +173,9 @@ pub(crate) fn open_on(app: &mut App, url: Option<&str>) {
         project.name.clone(),
         project.repo_path.clone(),
     );
-    let list = rows(app, &project.id);
-    rebuild_list(&mut view, list);
+    view.mine = crate::config::Config::load().pr_list_mine;
+    let list = rows(app, &project.id, view.mine);
+    rebuild_list(&mut view, &list);
     let start = url
         .and_then(|url| list.iter().position(|row| row.url == url))
         .unwrap_or(0);
@@ -210,12 +217,19 @@ pub(crate) fn reopen(app: &mut App, view: PullRequestsView) {
 
 /// The project's open pull requests, as the group shows them (drafts and
 /// all: the modal lists everything open, whatever `hide_draft_prs` keeps
-/// out of the panel).
-fn rows<'a>(app: &'a App, project: &ProjectId) -> &'a [OpenPr] {
+/// out of the panel) — only yours when `mine`. The list itself is never
+/// narrowed: the panels and the `/` palette read it whole.
+fn rows(app: &App, project: &ProjectId, mine: bool) -> Vec<OpenPr> {
     app.github
         .open_prs
         .get(project)
-        .map_or(&[], |open| open.list.as_slice())
+        .map_or_else(Vec::new, |open| {
+            open.list
+                .iter()
+                .filter(|pr| !mine || pr.mine)
+                .cloned()
+                .collect()
+        })
 }
 
 /// Is there a filter to apply — text in the row beyond whitespace?
@@ -272,7 +286,7 @@ fn selected_pr(app: &App) -> Option<OpenPr> {
     let Some(Overlay::PullRequests(view)) = &app.modals.overlay else {
         return None;
     };
-    let list = rows(app, &view.project).to_vec();
+    let list = rows(app, &view.project, view.mine);
     cursor_index(view, &list).and_then(|i| list.get(i).cloned())
 }
 
@@ -321,7 +335,7 @@ pub(crate) fn list_changed(app: &mut App) {
     let Some(Overlay::PullRequests(view)) = &app.modals.overlay else {
         return;
     };
-    let list = rows(app, &view.project).to_vec();
+    let list = rows(app, &view.project, view.mine);
     let found = view
         .selected_url
         .as_ref()
@@ -354,7 +368,7 @@ fn select(app: &mut App, index: i64) {
     let Some(Overlay::PullRequests(view)) = &app.modals.overlay else {
         return;
     };
-    let list = rows(app, &view.project);
+    let list = rows(app, &view.project, view.mine);
     let next = clamp_selection(index, list.len());
     let url = list.get(next).map(|pr| pr.url.clone());
     let Some(Overlay::PullRequests(view)) = &mut app.modals.overlay else {
@@ -376,8 +390,8 @@ fn step(app: &mut App, delta: i64) {
     let Some(Overlay::PullRequests(view)) = &app.modals.overlay else {
         return;
     };
-    let list = rows(app, &view.project);
-    let Some(current) = cursor_index(view, list) else {
+    let list = rows(app, &view.project, view.mine);
+    let Some(current) = cursor_index(view, &list) else {
         return;
     };
     let at = view
@@ -402,7 +416,7 @@ fn query_changed(app: &mut App) {
     let Some(Overlay::PullRequests(view)) = &app.modals.overlay else {
         return;
     };
-    let list = rows(app, &view.project).to_vec();
+    let list = rows(app, &view.project, view.mine);
     let Some(Overlay::PullRequests(view_mut)) = &mut app.modals.overlay else {
         return;
     };
@@ -463,6 +477,23 @@ fn refresh(app: &mut App) {
     }
     app.chrome.flash = Some("refreshing pull requests…".into());
     app.chrome.dirty = true;
+}
+
+/// `Ctrl+t`: only the pull requests you opened, or everyone's — written
+/// back to the `pr_list_mine` SETTING, so the next `v` opens the same way.
+/// The cursor stays on its pull request when the new list still holds it.
+fn toggle_mine(app: &mut App) {
+    let Some(Overlay::PullRequests(view)) = &mut app.modals.overlay else {
+        return;
+    };
+    view.mine = !view.mine;
+    let mine = view.mine;
+    list_changed(app);
+    let mut cfg = crate::config::Config::load();
+    cfg.pr_list_mine = mine;
+    if let Err(e) = cfg.save() {
+        app.chrome.flash = Some(format!("could not save the pull request filter: {e}"));
+    }
 }
 
 // ---- launching ----
@@ -621,6 +652,7 @@ pub(crate) fn handle_key(app: &mut App, key: KeyEvent, out: &mut Vec<ClientReque
         }
         KeyCode::Char('o') if ctrl => open_in_browser(app, out),
         KeyCode::Char('r') if ctrl => refresh(app),
+        KeyCode::Char('t') if ctrl => toggle_mine(app),
         // Everything else feeds the always-live fuzzy filter, which edits
         // like a terminal line (see text_input).
         _ => {
@@ -678,7 +710,7 @@ pub(crate) fn handle_mouse(
 
 /// The footer's key line for the modal.
 pub(crate) fn footer_hint() -> &'static str {
-    "type to filter  ↑/↓ ^n/^p: pull request  PgUp/PgDn ^d/^u: read  Enter: prompt an agent  Tab: harness  ⇧Tab: preset  ^c/^y: comment  ^g: diff  ^o: browser  ^r: refresh  Esc: clear / close"
+    "type to filter  ↑/↓ ^n/^p: pull request  PgUp/PgDn ^d/^u: read  Enter: prompt an agent  Tab: harness  ⇧Tab: preset  ^c/^y: comment  ^g: diff  ^o: browser  ^r: refresh  ^t: yours / all  Esc: clear / close"
 }
 
 // ---- drawing ----
@@ -809,7 +841,7 @@ pub(crate) fn draw(
     ])
     .areas(area);
 
-    let rows: Vec<OpenPr> = rows(app, &view.project).to_vec();
+    let rows: Vec<OpenPr> = rows(app, &view.project, view.mine);
     let mut list_view = view.clone();
     rebuild_list(&mut list_view, &rows);
     list_view.list.move_to_item(view.selected);
@@ -828,7 +860,12 @@ pub(crate) fn draw(
         rows.len().to_string()
     };
     let title = format!(
-        "Pull requests — {} ({}{})",
+        "{} — {} ({}{})",
+        if view.mine {
+            "Your pull requests"
+        } else {
+            "Pull requests"
+        },
         view.project_name,
         count,
         if inflight { ", refreshing…" } else { "" }
@@ -868,7 +905,12 @@ pub(crate) fn draw(
         if inflight || !asked {
             empty_list_row(f, rows_area, "asking GitHub…", th);
         } else if !stale {
-            empty_list_row(f, rows_area, "no open pull requests", th);
+            let empty = if view.mine {
+                "none of yours open (^t: everyone's)"
+            } else {
+                "no open pull requests"
+            };
+            empty_list_row(f, rows_area, empty, th);
         }
     } else if list_view.list.matches.is_empty() {
         empty_list_row(f, rows_area, "no pull requests match", th);
@@ -984,6 +1026,7 @@ mod tests {
             health: Health::default(),
             head: format!("branch-{number}"),
             base: "main".into(),
+            mine: false,
         }
     }
 
@@ -1122,6 +1165,127 @@ mod tests {
         app.github.pr_detail_stale.insert(url.clone());
         open(&mut app);
         assert_eq!(pending_url(&app), Some(url.as_str()));
+    }
+
+    fn mine(number: u64, title: &str) -> OpenPr {
+        OpenPr {
+            mine: true,
+            ..pr(number, title, false)
+        }
+    }
+
+    fn numbers(app: &App) -> Vec<u64> {
+        let v = view(app);
+        v.list
+            .matches
+            .iter()
+            .map(|m| v.list.items[m.item].number)
+            .collect()
+    }
+
+    /// With the `pr_list_mine` SETTING on, `v` opens on your pull requests
+    /// alone, says so in its title, and the row under the cursor — what
+    /// Enter, Ctrl+g and the reading pane act on — is one of yours.
+    #[test]
+    fn the_setting_opens_the_modal_on_your_pull_requests() {
+        pinned(|| {
+            let mut cfg = crate::config::Config::load();
+            cfg.pr_list_mine = true;
+            cfg.save().unwrap();
+            let (mut app, project) = app_with(
+                vec![
+                    pr(44, "Adam's", false),
+                    mine(43, "Mine"),
+                    pr(42, "Zack's", false),
+                    mine(41, "Also mine"),
+                ],
+                true,
+            );
+            open(&mut app);
+            assert!(view(&app).mine);
+            assert_eq!(numbers(&app), [43, 41]);
+            assert_eq!(selected_pr(&app).map(|pr| pr.number), Some(43));
+            assert_eq!(pending_url(&app), Some("https://github.com/o/r/pull/43"));
+            let text = screen(&mut app, 120, 20);
+            assert!(text.contains("Your pull requests — demo (2)"), "{text}");
+            assert!(!text.contains("Adam's"), "{text}");
+            assert_eq!(
+                rows(&app, &project, false).len(),
+                4,
+                "the project's list itself is never narrowed"
+            );
+        });
+    }
+
+    /// Ctrl+t flips between yours and everyone's, writes the choice back,
+    /// and keeps the cursor on its pull request when the other list holds
+    /// it; one of someone else's lands on the first of yours.
+    #[test]
+    fn ctrl_t_flips_between_yours_and_everyones_and_saves_it() {
+        pinned(|| {
+            let (mut app, _) = app_with(
+                vec![
+                    pr(44, "Adam's", false),
+                    mine(43, "Mine"),
+                    mine(41, "Also mine"),
+                ],
+                true,
+            );
+            open(&mut app);
+            assert!(!view(&app).mine, "everyone's by default");
+            assert_eq!(numbers(&app), [44, 43, 41]);
+
+            // On someone else's row: narrowing lands on the first of yours.
+            handle_key(&mut app, ctrl('t'), &mut Vec::new());
+            assert!(view(&app).mine);
+            assert!(crate::config::Config::load().pr_list_mine, "saved");
+            assert_eq!(numbers(&app), [43, 41]);
+            assert_eq!(selected_pr(&app).map(|pr| pr.number), Some(43));
+            assert_eq!(pending_url(&app), Some("https://github.com/o/r/pull/43"));
+
+            // On one of yours: widening keeps the cursor on it.
+            handle_key(&mut app, key(KeyCode::Down), &mut Vec::new());
+            assert_eq!(selected_pr(&app).map(|pr| pr.number), Some(41));
+            handle_key(&mut app, ctrl('t'), &mut Vec::new());
+            assert!(!view(&app).mine);
+            assert!(!crate::config::Config::load().pr_list_mine, "saved");
+            assert_eq!(numbers(&app), [44, 43, 41]);
+            assert_eq!(selected_pr(&app).map(|pr| pr.number), Some(41));
+        });
+    }
+
+    /// A typed filter narrows within yours, and with none of yours open
+    /// the list says how to see everyone's.
+    #[test]
+    fn your_list_filters_and_says_when_none_of_yours_are_open() {
+        pinned(|| {
+            let (mut app, _) = app_with(
+                vec![
+                    pr(44, "Fix login", false),
+                    mine(43, "Fix logout"),
+                    mine(41, "Spike"),
+                ],
+                true,
+            );
+            open(&mut app);
+            handle_key(&mut app, ctrl('t'), &mut Vec::new());
+            for c in "fix".chars() {
+                handle_key(&mut app, key(KeyCode::Char(c)), &mut Vec::new());
+            }
+            assert_eq!(numbers(&app), [43]);
+            assert_eq!(selected_pr(&app).map(|pr| pr.number), Some(43));
+
+            // The next `v` opens on yours again: the Ctrl+t above was saved.
+            let (mut app, _) = app_with(vec![pr(44, "Adam's", false)], true);
+            open(&mut app);
+            assert!(view(&app).mine);
+            assert_eq!(selected_pr(&app), None);
+            let text = screen(&mut app, 120, 20);
+            assert!(
+                text.contains("none of yours open (^t: everyone's)"),
+                "{text}"
+            );
+        });
     }
 
     /// ↑/↓ (and Ctrl+n/p) walk the rows, each arming its own fetch; only

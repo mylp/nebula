@@ -653,6 +653,7 @@ mod tests {
             health: Default::default(),
             head: format!("pr-{number}"),
             base: "main".into(),
+            mine: false,
         };
         let now = std::time::Instant::now();
         let mut open_prs = HashMap::new();
@@ -714,6 +715,7 @@ mod tests {
             health,
             head: format!("pr-{number}"),
             base: "main".into(),
+            mine: false,
         };
         let now = std::time::Instant::now();
         let mut open_prs = HashMap::new();
@@ -787,6 +789,7 @@ mod tests {
             health: Default::default(),
             head: format!("pr-{number}"),
             base: "main".into(),
+            mine: false,
         };
         let now = std::time::Instant::now();
         let mut open_prs = HashMap::new();

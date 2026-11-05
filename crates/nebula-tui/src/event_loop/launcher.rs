@@ -12448,6 +12448,7 @@ mod tests {
             health: Default::default(),
             head: "feat".into(),
             base: "main".into(),
+            mine: false,
         };
         let at = std::time::Instant::now();
         app.github.open_prs.insert(

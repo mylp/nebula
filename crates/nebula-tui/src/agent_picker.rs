@@ -292,6 +292,7 @@ mod tests {
             health: Default::default(),
             head: PR_HEAD.into(),
             base: "main".into(),
+            mine: false,
         }
     }
 
