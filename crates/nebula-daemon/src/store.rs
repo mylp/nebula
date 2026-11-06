@@ -335,8 +335,11 @@ const MIGRATIONS: &[&str] = &[
     // 30: SESSION PRS — the pull requests a session made or took on, as a
     // JSON array of canonical GitHub URLs (oldest first). A short list on
     // the row, like RECENT PROMPTS; NULL (none) for every existing row.
+    // And the session that `nebula spawn`ed this one, so a card can count
+    // its spawned sessions' pull requests; NULL for every existing row.
     "
     ALTER TABLE agents ADD COLUMN prs TEXT;
+    ALTER TABLE agents ADD COLUMN spawned_by TEXT;
     ",
 ];
 
@@ -540,8 +543,8 @@ impl Store {
         issue_url: Option<&str>,
     ) -> Result<()> {
         self.conn.lock().execute(
-            "INSERT INTO agents (id, worktree_id, name, status, archived, archived_at, kind, claude_session_id, sort_order, created_at, status_changed_at, model, effort, auto_title_pending, unseen, cloud_session_id, pr_url, issue_url, custom_harness, role)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)",
+            "INSERT INTO agents (id, worktree_id, name, status, archived, archived_at, kind, claude_session_id, sort_order, created_at, status_changed_at, model, effort, auto_title_pending, unseen, cloud_session_id, pr_url, issue_url, custom_harness, role, spawned_by)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)",
             params![
                 a.id.as_str(),
                 a.worktree_id.as_str(),
@@ -563,6 +566,7 @@ impl Store {
                 issue_url,
                 a.custom_harness,
                 a.role.as_str(),
+                a.spawned_by.as_ref().map(|id| id.as_str()),
             ],
         )?;
         Ok(())
@@ -1193,7 +1197,7 @@ const WORKTREE_COLUMNS: &str = "id, project_id, path, branch, is_main, sort_orde
 const AGENT_COLUMNS: &str = "id, worktree_id, name, status, archived, kind, \
                              claude_session_id, sort_order, status_changed_at, model, effort, \
                              archived_at, unseen, cloud_session_id, recent_prompts, custom_harness, \
-                             issue_url, role, prs, pr_url";
+                             issue_url, role, prs, pr_url, spawned_by";
 const TERMINAL_COLUMNS: &str = "id, worktree_id, name, sort_order, run_command";
 const LINK_COLUMNS: &str = "id, worktree_id, url, sort_order";
 
@@ -1248,6 +1252,7 @@ fn row_to_agent(r: &rusqlite::Row) -> rusqlite::Result<Agent> {
             r.get::<_, Option<String>>(19)?.as_deref(),
             r.get::<_, Option<String>>(18)?.as_deref(),
         ),
+        spawned_by: r.get::<_, Option<String>>(20)?.map(AgentId),
     })
 }
 
@@ -1367,6 +1372,7 @@ mod tests {
             role: nebula_core::AgentRole::Worker,
             recent_prompts: Vec::new(),
             prs: Vec::new(),
+            spawned_by: None,
         };
         let pr_url = "https://github.com/AgentSystemLabs/nebula/pull/42";
         store
@@ -1393,6 +1399,7 @@ mod tests {
             role: nebula_core::AgentRole::Worker,
             recent_prompts: Vec::new(),
             prs: Vec::new(),
+            spawned_by: None,
         };
         store.insert_agent(&codex_agent).unwrap();
         let cursor_agent = Agent {
@@ -1416,6 +1423,7 @@ mod tests {
             role: nebula_core::AgentRole::Worker,
             recent_prompts: Vec::new(),
             prs: Vec::new(),
+            spawned_by: None,
         };
         store.insert_agent(&cursor_agent).unwrap();
         let issue_url = "https://github.com/AgentSystemLabs/nebula/issues/15";
@@ -1440,6 +1448,7 @@ mod tests {
             role: nebula_core::AgentRole::Worker,
             recent_prompts: Vec::new(),
             prs: Vec::new(),
+            spawned_by: None,
         };
         store
             .insert_agent_with_launch_context(&issue_agent, true, None, Some(issue_url))
@@ -1484,6 +1493,7 @@ mod tests {
             role: nebula_core::AgentRole::Worker,
             recent_prompts: Vec::new(),
             prs: Vec::new(),
+            spawned_by: None,
         };
         store.insert_agent(&custom).unwrap();
         let (_, _, reloaded, _) = store.load_tree().unwrap();
@@ -2026,6 +2036,7 @@ mod tests {
             role: nebula_core::AgentRole::Worker,
             recent_prompts: Vec::new(),
             prs: Vec::new(),
+            spawned_by: None,
         };
 
         // Default-named session: pending until the agent titles it, and the
@@ -2116,6 +2127,7 @@ mod tests {
                     role: nebula_core::AgentRole::Worker,
                     recent_prompts: Vec::new(),
                     prs: Vec::new(),
+                    spawned_by: None,
                 },
                 true,
             )
@@ -2247,6 +2259,7 @@ mod tests {
                     role: nebula_core::AgentRole::Worker,
                     recent_prompts: Vec::new(),
                     prs: Vec::new(),
+                    spawned_by: None,
                 })
                 .unwrap();
         }
@@ -2313,6 +2326,7 @@ mod tests {
                     role: nebula_core::AgentRole::Worker,
                     recent_prompts: Vec::new(),
                     prs: Vec::new(),
+                    spawned_by: None,
                 })
                 .unwrap();
         }
@@ -2376,6 +2390,7 @@ mod tests {
                 role: nebula_core::AgentRole::Worker,
                 recent_prompts: Vec::new(),
                 prs: Vec::new(),
+                spawned_by: None,
             };
             store.insert_agent(&agent).unwrap();
             agent.id
@@ -2477,6 +2492,7 @@ mod tests {
             role: nebula_core::AgentRole::Worker,
             recent_prompts: Vec::new(),
             prs: Vec::new(),
+            spawned_by: None,
         };
         let (a, b) = (
             "https://github.com/o/api/pull/7",
@@ -2509,6 +2525,23 @@ mod tests {
         store.add_agent_pr(&pr_session, a).unwrap();
         store.add_agent_pr(&pr_session, b).unwrap();
         assert_eq!(prs(&store, &pr_session), [b, a]);
+
+        // A spawned session knows who spawned it, on both row paths.
+        let spawned = AgentId("a3".into());
+        store
+            .insert_agent(&Agent {
+                spawned_by: Some(id.clone()),
+                ..agent("a3")
+            })
+            .unwrap();
+        assert_eq!(
+            store.get_agent(&spawned).unwrap().unwrap().spawned_by,
+            Some(id.clone())
+        );
+        let tree = store.load_tree().unwrap().2;
+        let row = tree.iter().find(|a| a.id == spawned).unwrap();
+        assert_eq!(row.spawned_by, Some(id.clone()));
+        assert_eq!(store.get_agent(&id).unwrap().unwrap().spawned_by, None);
 
         store
             .conn
@@ -2564,6 +2597,7 @@ mod tests {
                 role: nebula_core::AgentRole::Worker,
                 recent_prompts: Vec::new(),
                 prs: Vec::new(),
+                spawned_by: None,
             })
             .unwrap();
         let entry = |n: usize| PromptEntry {

@@ -122,6 +122,9 @@ pub(crate) struct CreateAgentSpec {
     /// `pr_scope::issue_rule`). Persisted like `pr_url`.
     pub issue_url: Option<String>,
     pub role: nebula_core::AgentRole,
+    /// The session that ran `nebula spawn` for this one. Persisted on the
+    /// row (`Agent::spawned_by`).
+    pub spawned_by: Option<AgentId>,
 }
 
 /// A pre-spawned agent CLI waiting to be adopted by the next CreateAgent for
@@ -2569,6 +2572,7 @@ mod tests {
                 pr_url: None,
                 issue_url: None,
                 role: nebula_core::AgentRole::Worker,
+                spawned_by: None,
             })
             .await
             .unwrap_err();
@@ -2588,6 +2592,7 @@ mod tests {
                 pr_url: None,
                 issue_url: None,
                 role: nebula_core::AgentRole::Worker,
+                spawned_by: None,
             })
             .await
             .unwrap_err();
@@ -2607,6 +2612,7 @@ mod tests {
                 pr_url: None,
                 issue_url: None,
                 role: nebula_core::AgentRole::Worker,
+                spawned_by: None,
             })
             .await
             .unwrap_err();
@@ -2626,6 +2632,7 @@ mod tests {
                 pr_url: None,
                 issue_url: None,
                 role: nebula_core::AgentRole::Worker,
+                spawned_by: None,
             })
             .await
             .unwrap_err();
@@ -2648,6 +2655,7 @@ mod tests {
             pr_url: Some("https://github.com/o/r/pull/7".into()),
             issue_url: None,
             role: nebula_core::AgentRole::Worker,
+            spawned_by: None,
         };
         for kind in AgentKind::ALL {
             if kind == AgentKind::Custom {
@@ -2813,6 +2821,7 @@ mod tests {
             pr_url: None,
             issue_url: Some("https://github.com/o/r/issues/15".into()),
             role: nebula_core::AgentRole::Worker,
+            spawned_by: None,
         };
         for kind in AgentKind::ALL {
             if kind == AgentKind::Custom {
@@ -2859,6 +2868,7 @@ mod tests {
             pr_url: None,
             issue_url: None,
             role: nebula_core::AgentRole::Worker,
+            spawned_by: None,
         };
         // Validation runs before the worktree lookup, so an unknown
         // worktree is fine here and every failure is the prompt's own.
@@ -2968,6 +2978,7 @@ mod tests {
             pr_url: None,
             issue_url: None,
             role: nebula_core::AgentRole::Worker,
+            spawned_by: None,
         };
 
         let created = |mut events: broadcast::Receiver<ServerEvent>| {
@@ -3137,6 +3148,7 @@ mod tests {
                 role: nebula_core::AgentRole::Worker,
                 recent_prompts: Vec::new(),
                 prs: Vec::new(),
+                spawned_by: None,
             })
             .unwrap();
     }
@@ -3285,6 +3297,7 @@ mod tests {
                 pr_url: None,
                 issue_url: None,
                 role: nebula_core::AgentRole::Worker,
+                spawned_by: None,
             })
             .await
             .unwrap()
@@ -3427,6 +3440,7 @@ mod tests {
                 pr_url: None,
                 issue_url: None,
                 role: nebula_core::AgentRole::Worker,
+                spawned_by: None,
             })
             .await
             .unwrap()
@@ -3532,6 +3546,7 @@ mod tests {
                     role: nebula_core::AgentRole::Worker,
                     recent_prompts: Vec::new(),
                     prs: Vec::new(),
+                    spawned_by: None,
                 },
                 true,
             )

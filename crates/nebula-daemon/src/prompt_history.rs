@@ -235,6 +235,7 @@ pub(crate) mod tests {
                 role: nebula_core::AgentRole::Worker,
                 recent_prompts: Vec::new(),
                 prs: Vec::new(),
+                spawned_by: None,
             })
             .unwrap();
         let daemon = Daemon::new(

@@ -38,6 +38,7 @@ impl Daemon {
             pr_url,
             issue_url,
             role,
+            spawned_by,
         } = spec;
         let cloud_prompt = match cloud_prompt {
             Some(_) if kind != AgentKind::Claude => {
@@ -147,7 +148,13 @@ impl Daemon {
             issue_url: issue_url.clone(),
             role,
             recent_prompts: Vec::new(),
-            prs: Vec::new(),
+            // As the stored row reads it: a PR SESSION's own pull request.
+            prs: pr_url
+                .as_deref()
+                .and_then(nebula_core::github_url::github_pr_url)
+                .into_iter()
+                .collect(),
+            spawned_by,
         };
         // A cloud task is the session's first prompt, and the only one
         // nebula will ever see typed for it: the agent runs in the sandbox,

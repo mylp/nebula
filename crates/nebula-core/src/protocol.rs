@@ -18,7 +18,7 @@ pub const PROTOCOL_VERSION: u32 = 52;
 /// `[MIN_COMPATIBLE_PROTOCOL, PROTOCOL_VERSION]` range includes at least one
 /// version the other peer also supports.
 ///
-/// 52: `Agent` grew `prs` (SESSION PRS). Frames are positional MessagePack,
+/// 52: `Agent` grew `prs` (SESSION PRS) and `spawned_by`. Frames are positional MessagePack,
 /// and an older decoder refuses a struct with a field it doesn't know
 /// (`LengthMismatch`), so every peer moves together.
 pub const MIN_COMPATIBLE_PROTOCOL: u32 = 52;
@@ -625,6 +625,10 @@ pub struct SessionSummary {
     /// The row's SESSION PRS (`Agent::prs`); empty for a terminal.
     #[serde(default)]
     pub prs: Vec<String>,
+    /// The id of the session that `nebula spawn`ed this one
+    /// (`Agent::spawned_by`).
+    #[serde(default)]
+    pub spawned_by: Option<String>,
 }
 
 /// Daemon-side half of the metrics modal's data; the client stacks its own

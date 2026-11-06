@@ -638,7 +638,7 @@ pub async fn ask_session(
 fn print_session_summaries(sessions: &[SessionSummary]) {
     for session in sessions {
         println!(
-            "{} name={} project={} branch={} worktree={} harness={} status={}{}{} summary={}",
+            "{} name={} project={} branch={} worktree={} harness={} status={}{}{}{} summary={}",
             session.id,
             shell_word(&session.name),
             shell_word(&session.project),
@@ -652,6 +652,10 @@ fn print_session_summaries(sessions: &[SessionSummary]) {
             } else {
                 format!(" prs={}", session.prs.join(","))
             },
+            session
+                .spawned_by
+                .as_deref()
+                .map_or_else(String::new, |id| format!(" spawned_by={id}")),
             shell_word(&session.summary)
         );
     }

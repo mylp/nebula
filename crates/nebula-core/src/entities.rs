@@ -282,6 +282,12 @@ pub struct Agent {
     /// predates the capture.
     #[serde(default)]
     pub prs: Vec<String>,
+    /// The session that started this one with `nebula spawn`, if any — so
+    /// a card can count the pull requests of the sessions it spawned as
+    /// part of its own work. None for every other row, and for every row
+    /// that predates the link.
+    #[serde(default)]
+    pub spawned_by: Option<AgentId>,
 }
 
 impl Agent {
@@ -359,6 +365,9 @@ pub struct Link {
     pub sort_order: i64,
 }
 
+// `Agent` is the big variant; an entity is a one-off upsert, never held in
+// bulk, so boxing it would cost every `Entity::Agent` match for nothing.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Entity {
     Project(Project),

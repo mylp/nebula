@@ -866,6 +866,7 @@ impl ClientConnection {
                 pr_url: None,
                 issue_url,
                 role,
+                spawned_by: None,
             })
             .await;
         if let Some(launch_mode) = launch_mode {

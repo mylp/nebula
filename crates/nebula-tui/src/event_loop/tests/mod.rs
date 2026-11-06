@@ -32,6 +32,7 @@ fn seed_agent_in(app: &mut App, id: &str, worktree: &nebula_core::WorktreeId) {
                 role: nebula_core::AgentRole::Worker,
                 recent_prompts: Vec::new(),
                 prs: Vec::new(),
+                spawned_by: None,
             }),
         },
     );
@@ -63,6 +64,7 @@ fn seed_second_agent(app: &mut App, status: nebula_core::AgentStatus) {
                 role: nebula_core::AgentRole::Worker,
                 recent_prompts: Vec::new(),
                 prs: Vec::new(),
+                spawned_by: None,
             }),
         },
     );
@@ -858,6 +860,7 @@ pub(super) fn seed_tree(app: &mut App) {
                 role: nebula_core::AgentRole::Worker,
                 recent_prompts: Vec::new(),
                 prs: Vec::new(),
+                spawned_by: None,
             }),
         },
     );
@@ -5286,6 +5289,7 @@ fn working_sessions_head_the_list_regardless_of_age() {
                 role: nebula_core::AgentRole::Worker,
                 recent_prompts: Vec::new(),
                 prs: Vec::new(),
+                spawned_by: None,
             }),
         };
     // Finished a moment ago: near the top on the timestamp alone.
@@ -5342,6 +5346,7 @@ fn sessions_order_by_last_interaction() {
             role: nebula_core::AgentRole::Worker,
             recent_prompts: Vec::new(),
             prs: Vec::new(),
+            spawned_by: None,
         }),
     };
     // A long-running turn outranks a more recent finish, because a
@@ -5426,6 +5431,7 @@ fn a_session_created_running_leads_the_working_ones() {
             role: nebula_core::AgentRole::Worker,
             recent_prompts: Vec::new(),
             prs: Vec::new(),
+            spawned_by: None,
         }),
     };
     hse(
@@ -5488,6 +5494,7 @@ fn status_change_resorts_and_selection_follows() {
                 role: nebula_core::AgentRole::Worker,
                 recent_prompts: Vec::new(),
                 prs: Vec::new(),
+                spawned_by: None,
             }),
         },
     );
@@ -5685,6 +5692,7 @@ fn worktree_delete_is_optimistic_and_rolls_back_on_error() {
                 role: nebula_core::AgentRole::Worker,
                 recent_prompts: Vec::new(),
                 prs: Vec::new(),
+                spawned_by: None,
             }),
         },
     );
@@ -8019,6 +8027,7 @@ fn walking_onto_a_reaped_session_still_waits_out_the_debounce() {
                 role: nebula_core::AgentRole::Worker,
                 recent_prompts: Vec::new(),
                 prs: Vec::new(),
+                spawned_by: None,
             }),
         },
     );
@@ -8624,6 +8633,7 @@ fn archived_agent(id: &str, name: &str, archived_at: i64, sort: i64) -> nebula_c
         role: nebula_core::AgentRole::Worker,
         recent_prompts: Vec::new(),
         prs: Vec::new(),
+        spawned_by: None,
     })
 }
 
@@ -10225,6 +10235,7 @@ fn selection_follows_the_selected_agent_when_the_daemon_rehomes_it() {
         role: nebula_core::AgentRole::Worker,
         recent_prompts: Vec::new(),
         prs: Vec::new(),
+        spawned_by: None,
     };
 
     // a1 is the selected session; its upsert lands under w2.
@@ -10421,6 +10432,7 @@ fn agent_stamped(id: &str, wt: &str, at: i64) -> nebula_core::Entity {
         role: nebula_core::AgentRole::Worker,
         recent_prompts: Vec::new(),
         prs: Vec::new(),
+        spawned_by: None,
     })
 }
 
@@ -12174,6 +12186,7 @@ fn seed_second_project(app: &mut App) {
                 role: nebula_core::AgentRole::Worker,
                 recent_prompts: Vec::new(),
                 prs: Vec::new(),
+                spawned_by: None,
             }),
         },
     );
@@ -12201,6 +12214,7 @@ fn seed_second_project(app: &mut App) {
                 role: nebula_core::AgentRole::Worker,
                 recent_prompts: Vec::new(),
                 prs: Vec::new(),
+                spawned_by: None,
             }),
         },
     );
@@ -12533,6 +12547,7 @@ fn seed_attention_ring(app: &mut App) {
         role: nebula_core::AgentRole::Worker,
         recent_prompts: Vec::new(),
         prs: Vec::new(),
+        spawned_by: None,
     };
     for a in [
         agent("ask", "w2", AgentStatus::NeedsFeedback, false),
@@ -12999,6 +13014,7 @@ fn palette_rows_take_their_status_color_and_sweep() {
                 role: nebula_core::AgentRole::Worker,
                 recent_prompts: Vec::new(),
                 prs: Vec::new(),
+                spawned_by: None,
             }),
         },
     );
@@ -15452,6 +15468,7 @@ fn shift_d_bulk_deletes_the_visible_sessions() {
                     role: nebula_core::AgentRole::Worker,
                     recent_prompts: Vec::new(),
                     prs: Vec::new(),
+                    spawned_by: None,
                 }),
             },
         );
@@ -15527,6 +15544,7 @@ fn agent_entity(id: &str, wt: &str, name: &str, archived: bool) -> nebula_core::
         role: nebula_core::AgentRole::Worker,
         recent_prompts: Vec::new(),
         prs: Vec::new(),
+        spawned_by: None,
     })
 }
 
@@ -16225,6 +16243,7 @@ fn a_cross_project_session_jump_attaches_only_the_session_picked() {
                 role: nebula_core::AgentRole::Worker,
                 recent_prompts: Vec::new(),
                 prs: Vec::new(),
+                spawned_by: None,
             }),
         },
     );
@@ -16294,6 +16313,7 @@ fn seed_background_run(app: &mut App) {
                 role: nebula_core::AgentRole::Worker,
                 recent_prompts: Vec::new(),
                 prs: Vec::new(),
+                spawned_by: None,
             }),
         },
     );
@@ -17117,6 +17137,7 @@ fn the_issue_quick_prompt_stands_on_the_modal() {
                     role: nebula_core::AgentRole::Worker,
                     recent_prompts: Vec::new(),
                     prs: Vec::new(),
+                    spawned_by: None,
                 }),
             },
         );
@@ -18588,6 +18609,7 @@ fn a_quick_prompt_lands_the_row_without_taking_the_pane() {
                     role: nebula_core::AgentRole::Worker,
                     recent_prompts: Vec::new(),
                     prs: Vec::new(),
+                    spawned_by: None,
                 }),
             },
         );
@@ -20668,6 +20690,7 @@ fn parity_tree() -> App {
                 role: nebula_core::AgentRole::Worker,
                 recent_prompts: Vec::new(),
                 prs: Vec::new(),
+                spawned_by: None,
             }),
         },
     );

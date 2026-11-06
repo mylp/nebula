@@ -199,6 +199,7 @@ impl Daemon {
             pr_url: None,
             issue_url: None,
             role: AgentRole::Worker,
+            spawned_by: None,
         })
         .await
     }
@@ -339,6 +340,7 @@ mod tests {
             alive: false,
             recent_prompts: Vec::new(),
             prs: Vec::new(),
+            spawned_by: None,
         }
     }
 

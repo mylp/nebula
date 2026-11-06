@@ -141,6 +141,7 @@ impl Daemon {
             pr_url: None,
             issue_url: None,
             role: nebula_core::AgentRole::Worker,
+            spawned_by: Some(caller.id.clone()),
         })
     }
 
@@ -279,6 +280,7 @@ mod tests {
             role: nebula_core::AgentRole::Worker,
             recent_prompts: Vec::new(),
             prs: Vec::new(),
+            spawned_by: None,
         }
     }
 
@@ -319,6 +321,11 @@ mod tests {
             Some("Fix the login redirect")
         );
         assert!(spec.cloud_prompt.is_none() && spec.pr_url.is_none() && spec.issue_url.is_none());
+        assert_eq!(
+            spec.spawned_by,
+            Some(caller.id.clone()),
+            "the new row knows who spawned it"
+        );
     }
 
     #[test]

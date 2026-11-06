@@ -236,6 +236,7 @@ fn agent_summary(
         alive: agent.alive,
         summary,
         prs: agent.prs,
+        spawned_by: agent.spawned_by.map(|id| id.to_string()),
     })
 }
 
@@ -265,6 +266,7 @@ fn terminal_summary(
         alive: terminal.alive,
         summary,
         prs: Vec::new(),
+        spawned_by: None,
     })
 }
 
@@ -616,6 +618,7 @@ mod tests {
             alive: false,
             recent_prompts: Vec::new(),
             prs: Vec::new(),
+            spawned_by: None,
         }
     }
 
