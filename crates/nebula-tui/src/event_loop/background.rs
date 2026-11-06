@@ -1081,7 +1081,7 @@ pub(crate) fn request_pr_diff(app: &mut App) {
 /// window's, whose modal the diff's replaces. Fetched by URL, so a pull
 /// request in a repo with no project in nebula opens all the same.
 pub(crate) fn request_pr_diff_for(app: &mut App, number: u64, url: String, title: String) {
-    if app.github.pr_diff_inflight == Some(number) {
+    if app.github.pr_diff_inflight.as_deref() == Some(url.as_str()) {
         app.chrome.flash = Some(format!("still fetching the diff for #{number}…"));
         return;
     }
@@ -1093,7 +1093,7 @@ pub(crate) fn request_pr_diff_for(app: &mut App, number: u64, url: String, title
     } else {
         app.chrome.flash = Some(format!("fetching the diff for #{number}…"));
     }
-    app.github.pr_diff_inflight = Some(number);
+    app.github.pr_diff_inflight = Some(url.clone());
     app.chrome.dirty = true;
     tokio::spawn(async move {
         let diff = crate::pull_request::diff(&url).await;
@@ -1135,7 +1135,7 @@ pub(crate) fn land_pr_diff(app: &mut App, answer: PrDiffAnswer) {
         open_pr_diff_view(app, number, &url, title, diff);
         return;
     }
-    if app.github.pr_diff_inflight == Some(number) {
+    if app.github.pr_diff_inflight.as_deref() == Some(url.as_str()) {
         app.github.pr_diff_inflight = None;
     }
     // A fetch that failed leaves the cached copy on screen: it was the best
@@ -1203,7 +1203,7 @@ pub(crate) fn open_pr_diff_view(
     title: String,
     diff: Option<String>,
 ) {
-    if app.github.pr_diff_inflight == Some(number) {
+    if app.github.pr_diff_inflight.as_deref() == Some(url) {
         app.github.pr_diff_inflight = None;
     }
     let Some(diff) = diff else {

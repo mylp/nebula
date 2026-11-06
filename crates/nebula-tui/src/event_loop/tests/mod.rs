@@ -2959,7 +2959,7 @@ fn g_on_the_sessions_pr_row_reads_its_diff() {
     app.nav.sel_session = sessions_pr_row(&app);
     let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
     app.github.pr_diff_tx = Some(tx);
-    app.github.pr_diff_inflight = Some(7);
+    app.github.pr_diff_inflight = Some(pr_url(7));
     let mut out = Vec::new();
 
     press(&mut app, KeyCode::Char('g'), KeyModifiers::NONE, &mut out);
@@ -3261,7 +3261,7 @@ diff --git a/src/b.rs b/src/b.rs
 -x
 +y
 ";
-    app.github.pr_diff_inflight = Some(7);
+    app.github.pr_diff_inflight = Some(pr_url(7));
     open_pr_diff_view(
         &mut app,
         7,
@@ -3632,7 +3632,7 @@ fn a_failed_pr_diff_flashes_instead_of_opening() {
     seed_open_prs(&mut app, &[(7, "Attach links")]);
     app.nav.sel_worktree = 1;
 
-    app.github.pr_diff_inflight = Some(7);
+    app.github.pr_diff_inflight = Some(pr_url(7));
     open_pr_diff_view(&mut app, 7, &pr_url(7), "#7 Attach links".into(), None);
     assert!(app.modals.overlay.is_none());
     assert!(
@@ -3652,7 +3652,7 @@ fn a_failed_pr_diff_flashes_instead_of_opening() {
     // Mashing the key while one is in flight is a nudge, not a request.
     let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
     app.github.pr_diff_tx = Some(tx);
-    app.github.pr_diff_inflight = Some(7);
+    app.github.pr_diff_inflight = Some(pr_url(7));
     request_pr_diff(&mut app);
     assert_eq!(
         app.chrome.flash.as_deref(),
@@ -4092,7 +4092,7 @@ diff --git a/src/b.rs b/src/b.rs
 
     // The same diff lands: nothing moves, and the fetch is done.
     app.github.pr_diff_refreshing.insert(url.clone());
-    app.github.pr_diff_inflight = Some(7);
+    app.github.pr_diff_inflight = Some(pr_url(7));
     land_pr_diff(&mut app, answer(Some(cached)));
     assert!(app.github.pr_diff_inflight.is_none());
     assert!(app.github.pr_diff_refreshing.is_empty());
@@ -21428,6 +21428,69 @@ fn session_prs_esc_from_a_diff_goes_back_to_the_list() {
         app.modals.overlay = Some(Overlay::Diff(fake_diff_view(3)));
         press(&mut app, KeyCode::Esc, KeyModifiers::NONE, &mut out);
         assert!(app.modals.overlay.is_none(), "another diff closes outright");
+
+        // A diff that never opened (the fetch failed), then the window
+        // closed: a later diff of the same pull request, from anywhere,
+        // closes outright rather than bringing the old window back.
+        seed_session_prs(&mut app);
+        press(&mut app, KeyCode::Enter, KeyModifiers::NONE, &mut out);
+        press(&mut app, KeyCode::Esc, KeyModifiers::NONE, &mut out);
+        open_pr_diff_view(
+            &mut app,
+            1,
+            "https://github.com/o/bjs/pull/1",
+            "#1".into(),
+            Some("diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1 +1 @@\n-a\n+b\n".into()),
+        );
+        press(&mut app, KeyCode::Esc, KeyModifiers::NONE, &mut out);
+        assert!(
+            app.modals.overlay.is_none(),
+            "the closed window stays closed"
+        );
+    });
+}
+
+/// More rows than the terminal is tall: the rows scroll so the cursor's
+/// is drawn, and the legend keeps its own line.
+#[test]
+fn session_prs_scroll_to_keep_the_cursor_above_the_legend() {
+    with_default_config(|| {
+        let mut app = App::new();
+        seed_tree(&mut app);
+        app.tree.agents[0].prs = (1..=40)
+            .map(|n| format!("https://github.com/o/bjs/pull/{n}"))
+            .collect();
+        app.nav.focus = Focus::Sessions;
+        press(
+            &mut app,
+            KeyCode::Char('w'),
+            KeyModifiers::NONE,
+            &mut Vec::new(),
+        );
+        for _ in 0..39 {
+            press(
+                &mut app,
+                KeyCode::Char('j'),
+                KeyModifiers::NONE,
+                &mut Vec::new(),
+            );
+        }
+        let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
+        terminal.draw(|f| ui::draw(f, &mut app)).unwrap();
+        let text = buffer_text(&terminal);
+        let last = text
+            .lines()
+            .position(|l| l.contains("bjs#40"))
+            .expect("the cursor's row is drawn");
+        let legend = text
+            .lines()
+            .position(|l| l.contains("Enter/g diff"))
+            .expect("the legend is drawn");
+        assert_eq!(
+            legend,
+            last + 1,
+            "the legend sits under the last row, not over it:\n{text}"
+        );
     });
 }
 

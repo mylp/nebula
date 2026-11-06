@@ -159,7 +159,10 @@ pub fn handle_key(app: &mut App, key: KeyEvent, out: &mut Vec<ClientRequest>) {
         return;
     };
     match key.code {
-        KeyCode::Esc | KeyCode::Char('q') => app.modals.overlay = None,
+        KeyCode::Esc | KeyCode::Char('q') => {
+            app.modals.overlay = None;
+            app.modals.session_prs_back = None;
+        }
         KeyCode::Down | KeyCode::Char('j') => view.step(1),
         KeyCode::Up | KeyCode::Char('k') => view.step(-1),
         KeyCode::Enter | KeyCode::Char('g') => {
@@ -206,14 +209,13 @@ pub fn repo_number(url: &str) -> String {
     format!("{repo}#{n}")
 }
 
-/// `#42 title` once GitHub has answered, `#42` until then.
+/// `repo#42 title` once GitHub has answered, `repo#42` until then — the
+/// diff modal's title, which has to say which repo too.
 fn label(app: &App, url: &str) -> String {
-    let title = app
-        .github
-        .pr_detail
-        .get(url)
-        .map_or("", |d| d.title.as_str());
-    crate::pull_request::numbered_label(number(url), title)
+    match app.github.pr_detail.get(url) {
+        Some(d) => format!("{} {}", repo_number(url), d.title),
+        None => repo_number(url),
+    }
 }
 
 #[cfg(test)]

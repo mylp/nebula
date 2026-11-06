@@ -2106,7 +2106,7 @@ mod tests {
         assert!(app.open_prs_lookup_due(&project));
         app.chrome.flash = None;
         // A fetch already running answers without spawning a second one.
-        app.github.pr_diff_inflight = Some(42);
+        app.github.pr_diff_inflight = Some("https://github.com/o/r/pull/42".into());
         handle_key(&mut app, ctrl('g'), &mut Vec::new());
         assert!(
             app.chrome

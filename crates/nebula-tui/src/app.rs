@@ -4295,9 +4295,10 @@ pub struct GithubState {
     /// line count as of the last draw (for clamping).
     pub pr_preview_scroll: u16,
     pub pr_preview_lines: usize,
-    /// The pull request whose full diff is being fetched, if any — one at a
-    /// time, so mashing the key can't spawn a `gh pr diff` per press.
-    pub pr_diff_inflight: Option<u64>,
+    /// The pull request (by URL) whose full diff is being fetched, if any —
+    /// one at a time, so mashing the key can't spawn a `gh pr diff` per
+    /// press. By URL, as the SESSION PRS window lists several repos.
+    pub pr_diff_inflight: Option<String>,
     /// Pull requests whose *cached* diff the modal opened on while a fresh
     /// `gh pr diff` runs underneath. When that lands it replaces the modal's
     /// contents in place if the modal is still on the same pull request,

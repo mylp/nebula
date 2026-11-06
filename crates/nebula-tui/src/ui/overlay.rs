@@ -61,8 +61,12 @@ fn draw_session_prs_overlay(
     let height = (view.rows.len() as u16 + 4).min(f.area().height.saturating_sub(2));
     let area = centered_rect(f.area(), width, height);
     let inner = render_modal_frame(f, area, format!(" Pull requests · {} ", view.name), th);
-    for (i, row) in view.rows.iter().enumerate() {
-        let Some(rect) = row_rect(inner, i) else {
+    // The last line is the legend's; the rows scroll so the cursor stays
+    // above it.
+    let list_h = (inner.height as usize).saturating_sub(1).max(1);
+    let top = (view.selected + 1).saturating_sub(list_h);
+    for (i, row) in view.rows.iter().enumerate().skip(top).take(list_h) {
+        let Some(rect) = row_rect(inner, i - top) else {
             break;
         };
         let line = match row {
@@ -107,7 +111,13 @@ fn draw_session_prs_overlay(
                     style = style.bg(th.sel_bg).add_modifier(Modifier::BOLD);
                 }
                 Line::from(vec![
-                    Span::styled(format!("  {:<18} ", repo_number(url)), style.fg(th.accent)),
+                    Span::styled(
+                        format!(
+                            "  {:<22} ",
+                            repo_number(url).chars().take(22).collect::<String>()
+                        ),
+                        style.fg(th.accent),
+                    ),
                     Span::styled(format!("{state:<7} "), style.fg(state_fg)),
                     Span::styled(format!("{size:<12} "), style.fg(th.dim)),
                     Span::styled(title, style),
