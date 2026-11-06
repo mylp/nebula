@@ -2105,12 +2105,14 @@ mod tests {
         assert!(app.github.pr_refresh_requested);
         assert!(app.open_prs_lookup_due(&project));
         app.chrome.flash = None;
+        // A fetch already running answers without spawning a second one.
+        app.github.pr_diff_inflight = Some(42);
         handle_key(&mut app, ctrl('g'), &mut Vec::new());
         assert!(
             app.chrome
                 .flash
                 .as_deref()
-                .is_some_and(|f| f.starts_with("repo path missing on disk")),
+                .is_some_and(|f| f.starts_with("still fetching the diff for #42")),
             "Ctrl+g reaches the diff fetch: {:?}",
             app.chrome.flash
         );

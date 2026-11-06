@@ -849,7 +849,8 @@ pub(crate) fn lookup_pr_detail(
     app.github.pr_detail_inflight.insert(pending.url.clone());
     let detail_tx = detail_tx.clone();
     tokio::spawn(async move {
-        let detail = crate::pull_request::detail(&pending.dir, pending.number).await;
+        let detail =
+            crate::pull_request::detail(Some(&pending.dir), &pending.number.to_string()).await;
         let _ = detail_tx.send((pending.url, detail));
     });
 }
@@ -1075,19 +1076,13 @@ pub(crate) fn request_pr_diff(app: &mut App) {
     request_pr_diff_for(app, pr.number, pr.url, pr.label);
 }
 
-/// [`request_pr_diff`] for pull request `number` of the selected project,
-/// titled `title` — the pane's row, or the PULL REQUESTS MODAL's (`g`
-/// there), whose modal the diff's replaces.
+/// [`request_pr_diff`] for pull request `number` at `url`, titled `title` —
+/// the pane's row, the PULL REQUESTS MODAL's (`g` there) or the SESSION PRS
+/// window's, whose modal the diff's replaces. Fetched by URL, so a pull
+/// request in a repo with no project in nebula opens all the same.
 pub(crate) fn request_pr_diff_for(app: &mut App, number: u64, url: String, title: String) {
     if app.github.pr_diff_inflight == Some(number) {
         app.chrome.flash = Some(format!("still fetching the diff for #{number}…"));
-        return;
-    }
-    let Some(dir) = app.selected_project().map(|p| p.repo_path.clone()) else {
-        return;
-    };
-    if !dir.is_dir() {
-        app.chrome.flash = Some(format!("repo path missing on disk: {}", dir.display()));
         return;
     }
     let Some(prdiff_tx) = app.github.pr_diff_tx.clone() else {
@@ -1101,7 +1096,7 @@ pub(crate) fn request_pr_diff_for(app: &mut App, number: u64, url: String, title
     app.github.pr_diff_inflight = Some(number);
     app.chrome.dirty = true;
     tokio::spawn(async move {
-        let diff = crate::pull_request::diff(&dir, number).await;
+        let diff = crate::pull_request::diff(&url).await;
         let _ = prdiff_tx.send(PrDiffAnswer {
             number,
             url,

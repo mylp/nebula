@@ -2192,6 +2192,9 @@ pub enum Overlay {
     Review(crate::review_modal::ReviewView),
     /// `^P` in the LAUNCHER VIEW's box: the PROJECT PICKER.
     ProjectPicker(crate::launcher::ProjectPicker),
+    /// `w` on a card: the SESSION PRS window — the pull requests that
+    /// session and the sessions it spawned registered.
+    SessionPrs(crate::session_prs::SessionPrsView),
 }
 
 /// Rows optimistically removed for an in-flight DeleteWorktree, kept so an
@@ -4074,6 +4077,10 @@ impl Default for ChromeState {
 
 pub struct ModalState {
     pub overlay: Option<Overlay>,
+    /// The SESSION PRS window a diff was opened from, put back when that
+    /// diff closes, so reading several of a session's pull requests is
+    /// Enter, Esc, j, Enter rather than reopening the list each time.
+    pub session_prs_back: Option<crate::session_prs::SessionPrsView>,
     /// The expanded session card's FOLLOW-UP COMPOSER, or None with every
     /// card folded. Not an `Overlay`: it draws inside the SESSIONS PANEL
     /// and the panels stay live around it — what it takes is the keyboard,
@@ -4122,6 +4129,7 @@ impl Default for ModalState {
     fn default() -> Self {
         Self {
             overlay: None,
+            session_prs_back: None,
             follow_up: None,
             diff_files_width: DEFAULT_DIFF_FILES_W,
             diff_tree: false,
@@ -4300,6 +4308,10 @@ pub struct GithubState {
     /// installs it at startup (the `vim_tx` precedent). Key handlers can
     /// therefore start a network fetch without the loop's channels in hand.
     pub pr_diff_tx: Option<tokio::sync::mpsc::UnboundedSender<PrDiffAnswer>>,
+    /// Where a `gh pr view` the SESSION PRS window started is sent back to
+    /// the loop — the pane's own detail channel, installed at startup like
+    /// `pr_diff_tx`.
+    pub pr_detail_tx: Option<tokio::sync::mpsc::UnboundedSender<(String, Option<PrDetail>)>>,
     /// Pull requests (by URL) with a `gh pr comment` still running. A
     /// second box sent on the same pull request waits for the first to
     /// land rather than racing it.
@@ -6016,6 +6028,9 @@ impl App {
                     .flatten()
                     .map(|pr| pr.url.clone()),
             )
+            // Every session's registered pull requests, so the SESSION PRS
+            // window's titles survive a list refresh.
+            .chain(self.tree.agents.iter().flat_map(|a| a.prs.iter().cloned()))
             .collect()
     }
 

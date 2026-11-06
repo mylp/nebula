@@ -939,17 +939,16 @@ impl PrComment {
     }
 }
 
-/// Ask `gh` for one pull request's description and conversation. `number`
-/// picks the PR, so this works from any checkout of the repo — the row the
-/// cursor is on need not be checked out anywhere.
-pub async fn detail(dir: &Path, number: u64) -> Option<PrDetail> {
-    let number = number.to_string();
+/// Ask `gh` for one pull request's description and conversation. `pr` is
+/// its number, read from `dir` (any checkout of the repo), or its URL, which
+/// needs no checkout at all.
+pub async fn detail(dir: Option<&Path>, pr: &str) -> Option<PrDetail> {
     let out = gh(
-        Some(dir),
+        dir,
         &[
             "pr",
             "view",
-            &number,
+            pr,
             "--json",
             "number,url,title,state,isDraft,mergeable,statusCheckRollup,author,\
              baseRefName,headRefName,additions,deletions,changedFiles,body,\
@@ -1022,15 +1021,10 @@ fn conversation(v: &serde_json::Value) -> Vec<PrComment> {
     out
 }
 
-/// The whole unified diff of a pull request, in one call. `None` when `gh`
-/// couldn't answer.
-pub async fn diff(dir: &Path, number: u64) -> Option<String> {
-    gh(
-        Some(dir),
-        &["pr", "diff", &number.to_string()],
-        DIFF_TIMEOUT,
-    )
-    .await
+/// The whole unified diff of a pull request, in one call, by URL — so it
+/// needs no checkout of the repo. `None` when `gh` couldn't answer.
+pub async fn diff(url: &str) -> Option<String> {
+    gh(None, &["pr", "diff", url], DIFF_TIMEOUT).await
 }
 
 /// How long a `gh pr comment` may run. The body is small and the call

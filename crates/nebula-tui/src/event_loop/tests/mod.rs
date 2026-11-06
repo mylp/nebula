@@ -21378,7 +21378,79 @@ fn every_overlay() -> Vec<(&'static str, fn(&mut App), Option<&'static str>)> {
             },
             Some("Prompt"),
         ),
+        ("SessionPrs", seed_session_prs, None),
     ]
+}
+
+/// `w` on agent-1 with two registered pull requests: the SESSION PRS window.
+fn seed_session_prs(app: &mut App) {
+    seed_tree(app);
+    app.tree.agents[0].prs = vec![
+        "https://github.com/o/bjs/pull/1".into(),
+        "https://github.com/o/go-api/pull/2".into(),
+    ];
+    app.nav.focus = Focus::Sessions;
+    press(app, KeyCode::Char('w'), KeyModifiers::NONE, &mut Vec::new());
+}
+
+/// Enter on a row starts its diff; Esc from that diff comes back to the
+/// list on the same row, and Esc there closes it. A diff opened from
+/// anywhere else still closes outright.
+#[test]
+fn session_prs_esc_from_a_diff_goes_back_to_the_list() {
+    with_default_config(|| {
+        let mut app = App::new();
+        let mut out = Vec::new();
+        seed_session_prs(&mut app);
+        let Some(Overlay::SessionPrs(view)) = &app.modals.overlay else {
+            panic!("w opens the window");
+        };
+        assert_eq!(view.selected_url(), Some("https://github.com/o/bjs/pull/1"));
+        press(&mut app, KeyCode::Char('j'), KeyModifiers::NONE, &mut out);
+        press(&mut app, KeyCode::Enter, KeyModifiers::NONE, &mut out);
+        let url = "https://github.com/o/go-api/pull/2";
+        open_pr_diff_view(
+            &mut app,
+            2,
+            url,
+            "#2".into(),
+            Some("diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1 +1 @@\n-a\n+b\n".into()),
+        );
+        assert!(matches!(&app.modals.overlay, Some(Overlay::Diff(_))));
+        press(&mut app, KeyCode::Esc, KeyModifiers::NONE, &mut out);
+        let Some(Overlay::SessionPrs(view)) = &app.modals.overlay else {
+            panic!("Esc from the diff comes back to the list");
+        };
+        assert_eq!(view.selected_url(), Some(url), "on the row it left");
+        press(&mut app, KeyCode::Esc, KeyModifiers::NONE, &mut out);
+        assert!(app.modals.overlay.is_none());
+
+        app.modals.overlay = Some(Overlay::Diff(fake_diff_view(3)));
+        press(&mut app, KeyCode::Esc, KeyModifiers::NONE, &mut out);
+        assert!(app.modals.overlay.is_none(), "another diff closes outright");
+    });
+}
+
+/// A card with nothing registered says how to register one, and opens
+/// nothing.
+#[test]
+fn session_prs_on_a_card_with_none_says_how_to_add_one() {
+    with_default_config(|| {
+        let mut app = App::new();
+        seed_tree(&mut app);
+        app.nav.focus = Focus::Sessions;
+        press(
+            &mut app,
+            KeyCode::Char('w'),
+            KeyModifiers::NONE,
+            &mut Vec::new(),
+        );
+        assert!(app.modals.overlay.is_none());
+        assert_eq!(
+            app.chrome.flash.as_deref(),
+            Some(crate::session_prs::NO_PRS)
+        );
+    });
 }
 
 fn file_tabs(app: &App) -> &crate::file_tabs::FileTabsView {
@@ -21516,6 +21588,7 @@ fn overlay_label(overlay: &Overlay) -> &'static str {
         Overlay::BranchSwitch(_) => "BranchSwitch",
         Overlay::Review(_) => "Review",
         Overlay::ProjectPicker(_) => "ProjectPicker",
+        Overlay::SessionPrs(_) => "SessionPrs",
     }
 }
 
@@ -21545,7 +21618,7 @@ fn the_overlay_table_covers_every_variant_exactly_once() {
         let mut unique = seen.clone();
         unique.dedup();
         assert_eq!(unique, seen, "two rows for the same variant");
-        assert_eq!(seen.len(), 19, "a variant came or went: {seen:?}");
+        assert_eq!(seen.len(), 20, "a variant came or went: {seen:?}");
     });
 }
 

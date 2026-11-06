@@ -43,6 +43,7 @@ pub(crate) fn overlay_area(overlay: &Overlay) -> Rect {
         Overlay::BranchSwitch(v) => v.area,
         Overlay::Review(v) => v.area,
         Overlay::ProjectPicker(v) => v.area,
+        Overlay::SessionPrs(v) => v.area,
     }
 }
 

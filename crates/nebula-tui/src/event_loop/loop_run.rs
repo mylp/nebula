@@ -65,6 +65,7 @@ macro_rules! main_loop_body {
         tokio::sync::mpsc::unbounded_channel::<(String, Option<crate::pull_request::PrDetail>)>();
     // A whole `gh pr diff`, which opens the diff modal when it lands — or
     // refreshes the one already open on the cached copy.
+    app.github.pr_detail_tx = Some(detail_tx.clone());
     let (prdiff_tx, mut prdiff_rx) = tokio::sync::mpsc::unbounded_channel::<PrDiffAnswer>();
     app.github.pr_diff_tx = Some(prdiff_tx);
     // A finished `gh pr comment`, which flashes its outcome when it lands

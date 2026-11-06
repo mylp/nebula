@@ -33,6 +33,7 @@ pub(crate) fn handle_overlay_key(app: &mut App, key: KeyEvent, out: &mut Vec<Cli
         Overlay::Issues(_) => crate::issues::handle_key(app, key, out),
         Overlay::PullRequests(_) => crate::pr_modal::handle_key(app, key, out),
         Overlay::BranchSwitch(_) => crate::branch_switch::handle_key(app, key),
+        Overlay::SessionPrs(_) => crate::session_prs::handle_key(app, key, out),
         Overlay::Review(_) => {
             crate::review_modal::handle_key(app, key);
         }
@@ -508,7 +509,11 @@ fn handle_diff_key(app: &mut App, key: KeyEvent, out: &mut Vec<ClientRequest>) {
                     view.filter.clear();
                     activate::diff_filter_changed(view);
                 }
-                KeyCode::Esc => app.modals.overlay = None,
+                // A diff opened from the SESSION PRS window goes back to it.
+                KeyCode::Esc => {
+                    let url = view.pr_url.clone();
+                    app.modals.overlay = crate::session_prs::back_from_diff(app, url.as_deref());
+                }
                 KeyCode::Char('d') if ctrl => activate::diff_file(view, at + half),
                 // Ctrl+u is the line editor's kill-to-start while something
                 // is typed; only with an empty filter does it move.

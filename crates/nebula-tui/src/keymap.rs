@@ -98,6 +98,9 @@ pub enum Action {
     /// `v`: the PULL REQUESTS MODAL — the project's open pull requests,
     /// read in place, commented on, with a PR SESSION launched on one.
     PullRequests,
+    /// `w`: the SESSION PRS window — the pull requests the card under the
+    /// cursor and the sessions it spawned registered, across repos.
+    SessionPullRequests,
     /// `c`: the BRANCH SWITCHER — move the project's ROOT WORKTREE onto
     /// another branch, asking what to do with uncommitted changes.
     SwitchBranch,
@@ -440,6 +443,15 @@ pub const ACTIONS: &[ActionSpec] = &[
         group: "PROJECTS & WORKTREES",
         scope: Scope::Global,
         defaults: &["v"],
+    },
+    ActionSpec {
+        action: Action::SessionPullRequests,
+        id: "session_pull_requests",
+        label: "Session's pull requests",
+        hint: "List the pull requests the session under the cursor registered — its gh pr create, nebula pr add — and those of the sessions it spawned, in any repo; Enter reads one's diff, o opens it on GitHub",
+        group: "PROJECTS & WORKTREES",
+        scope: Scope::Global,
+        defaults: &["w"],
     },
     ActionSpec {
         action: Action::SwitchBranch,

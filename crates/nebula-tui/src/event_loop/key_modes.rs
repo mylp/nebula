@@ -642,6 +642,7 @@ fn handle_tool_action(app: &mut App, action: crate::keymap::Action, out: &mut Ve
         Action::GitDiff if app.previewed_pr().is_some() => request_pr_diff(app),
         Action::GitDiff => open_diff_view(app),
         Action::CommentPullRequest => open_pr_comment(app),
+        Action::SessionPullRequests => crate::session_prs::open(app),
         Action::OpenRepo => open_repo_in_browser(app),
         // The grid takes this itself (`launcher::handle_action`); it
         // reaches here over a full-screen session the keys got past, which

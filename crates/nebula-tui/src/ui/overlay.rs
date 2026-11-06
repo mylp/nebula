@@ -43,7 +43,91 @@ impl Overlay {
             Overlay::FileTabs(view) => draw_file_tabs_overlay(f, app, view),
             Overlay::Tree(view) => draw_tree_overlay(f, app, view),
             Overlay::Review(view) => draw_review_overlay(f, app, view),
+            Overlay::SessionPrs(view) => draw_session_prs_overlay(f, app, view),
         }
+    }
+}
+
+/// The SESSION PRS window: a heading per session, a row per pull request
+/// — `repo#42`, its state and size, its title — and a key legend.
+fn draw_session_prs_overlay(
+    f: &mut Frame,
+    app: &mut App,
+    view: crate::session_prs::SessionPrsView,
+) {
+    use crate::session_prs::{repo_number, Row};
+    let th = app.chrome.theme;
+    let width = f.area().width.saturating_sub(4).min(110);
+    let height = (view.rows.len() as u16 + 4).min(f.area().height.saturating_sub(2));
+    let area = centered_rect(f.area(), width, height);
+    let inner = render_modal_frame(f, area, format!(" Pull requests · {} ", view.name), th);
+    for (i, row) in view.rows.iter().enumerate() {
+        let Some(rect) = row_rect(inner, i) else {
+            break;
+        };
+        let line = match row {
+            Row::Session { name, spawned } => {
+                let text = if *spawned {
+                    format!("↳ {name}")
+                } else {
+                    name.clone()
+                };
+                Line::from(Span::styled(
+                    text,
+                    Style::default().fg(th.muted).add_modifier(Modifier::BOLD),
+                ))
+            }
+            Row::Pr { url } => {
+                let (state, size, title, state_fg) = match app.github.pr_detail.get(url) {
+                    Some(d) => {
+                        let standing = crate::pull_request::Standing::of(&d.state, d.is_draft);
+                        let fg = match standing {
+                            crate::pull_request::Standing::Merged => th.done,
+                            crate::pull_request::Standing::Closed => th.err,
+                            crate::pull_request::Standing::Draft => th.dim,
+                            crate::pull_request::Standing::Open => th.ok,
+                        };
+                        (
+                            standing.badge().to_string(),
+                            format!("+{} −{}", d.additions, d.deletions),
+                            d.title.clone(),
+                            fg,
+                        )
+                    }
+                    None if app.github.pr_detail_failed.contains(url) => (
+                        String::new(),
+                        String::new(),
+                        "couldn't reach gh".into(),
+                        th.dim,
+                    ),
+                    None => (String::new(), String::new(), "…".into(), th.dim),
+                };
+                let mut style = Style::default();
+                if i == view.selected {
+                    style = style.bg(th.sel_bg).add_modifier(Modifier::BOLD);
+                }
+                Line::from(vec![
+                    Span::styled(format!("  {:<18} ", repo_number(url)), style.fg(th.accent)),
+                    Span::styled(format!("{state:<7} "), style.fg(state_fg)),
+                    Span::styled(format!("{size:<12} "), style.fg(th.dim)),
+                    Span::styled(title, style),
+                ])
+                .style(style)
+            }
+        };
+        f.render_widget(Paragraph::new(line), rect);
+    }
+    if let Some(rect) = row_rect(inner, inner.height.saturating_sub(1) as usize) {
+        f.render_widget(
+            Paragraph::new(Span::styled(
+                "Enter/g diff   o GitHub   j/k move   Esc close",
+                Style::default().fg(th.dim),
+            )),
+            rect,
+        );
+    }
+    if let Some(Overlay::SessionPrs(v)) = &mut app.modals.overlay {
+        v.area = area;
     }
 }
 
