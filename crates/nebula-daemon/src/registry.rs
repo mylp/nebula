@@ -3018,6 +3018,27 @@ mod tests {
         let events = daemon.events.subscribe();
         daemon.create_agent(spec("bare", None)).await.unwrap();
         assert_eq!(created(events).status, AgentStatus::Fresh);
+
+        // A PR SESSION and a spawned session broadcast what their stored
+        // rows read: its own pull request, and who spawned it.
+        let events = daemon.events.subscribe();
+        let EntityId::Agent(pr_session) = daemon
+            .create_agent(CreateAgentSpec {
+                pr_url: Some("https://github.com/o/r/pull/7/files".into()),
+                spawned_by: Some(with_task.clone()),
+                ..spec("pr", None)
+            })
+            .await
+            .unwrap()
+        else {
+            panic!("a create makes an agent");
+        };
+        let row = created(events);
+        let stored = daemon.store.get_agent(&pr_session).unwrap().unwrap();
+        assert_eq!(row.prs, ["https://github.com/o/r/pull/7"]);
+        assert_eq!(row.prs, stored.prs);
+        assert_eq!(row.spawned_by, Some(with_task.clone()));
+        assert_eq!(row.spawned_by, stored.spawned_by);
         drop(dir);
     }
 

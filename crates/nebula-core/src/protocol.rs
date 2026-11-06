@@ -18,9 +18,9 @@ pub const PROTOCOL_VERSION: u32 = 52;
 /// `[MIN_COMPATIBLE_PROTOCOL, PROTOCOL_VERSION]` range includes at least one
 /// version the other peer also supports.
 ///
-/// 52: `Agent` grew `prs` (SESSION PRS) and `spawned_by`. Frames are positional MessagePack,
-/// and an older decoder refuses a struct with a field it doesn't know
-/// (`LengthMismatch`), so every peer moves together.
+/// 52: `Agent` grew `prs` (SESSION PRS) and `spawned_by`. Frames are
+/// positional MessagePack, and an older decoder refuses a struct with a
+/// field it doesn't know (`LengthMismatch`), so every peer moves together.
 pub const MIN_COMPATIBLE_PROTOCOL: u32 = 52;
 
 /// First protocol whose daemon answers `ClientRequest::CheckWorktree`. A

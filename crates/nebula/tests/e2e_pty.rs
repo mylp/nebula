@@ -4849,6 +4849,24 @@ async fn nebula_spawn_cli_starts_a_sibling_session_in_the_same_worktree() {
     .await;
     let sibling = sibling_of(&events, AgentKind::Claude).unwrap();
     assert_eq!(sibling.name, "agent-2", "the first free default name");
+    assert_eq!(
+        sibling.spawned_by.as_ref(),
+        Some(&caller),
+        "it knows who spawned it"
+    );
+    // …and `nebula sessions` says so on its line, and only there.
+    let out = agent_cli(&env, &caller, &["sessions"]);
+    assert!(out.status.success(), "nebula sessions failed: {out:?}");
+    let listing = String::from_utf8_lossy(&out.stdout);
+    let line_of = |id: &str| {
+        listing
+            .lines()
+            .find(|l| l.starts_with(id))
+            .unwrap_or_else(|| panic!("no line for {id}:\n{listing}"))
+            .to_string()
+    };
+    assert!(line_of(&sibling.id.0).contains(&format!(" spawned_by={} ", caller.0)));
+    assert!(!line_of(&caller.0).contains("spawned_by="));
     // …and its CLI really booted (the stub logged its own env).
     let sibling_env = read_env_file(&env_dir.join(format!("{}.env", sibling.id.0))).await;
     assert_eq!(sibling_env[env::AGENT_ID], sibling.id.0);
@@ -4877,6 +4895,13 @@ async fn nebula_spawn_cli_starts_a_sibling_session_in_the_same_worktree() {
     assert_eq!(
         sibling_of(&events, AgentKind::Codex).unwrap().name,
         "agent-3"
+    );
+    assert_eq!(
+        sibling_of(&events, AgentKind::Codex)
+            .unwrap()
+            .spawned_by
+            .as_ref(),
+        Some(&caller)
     );
 
     // `--worktree` starts it in the project's worktree on that branch,
@@ -4919,6 +4944,7 @@ async fn nebula_spawn_cli_starts_a_sibling_session_in_the_same_worktree() {
     let spawned = in_worktree(&events, &feat.id).unwrap();
     assert_eq!(spawned.kind, AgentKind::Claude, "the caller's harness");
     assert_eq!(spawned.name, "agent-1", "named against its own worktree");
+    assert_eq!(spawned.spawned_by.as_ref(), Some(&caller));
     let caller_row = events.iter().rev().find_map(|e| match e {
         ServerEvent::EntityUpserted {
             entity: Entity::Agent(a),
