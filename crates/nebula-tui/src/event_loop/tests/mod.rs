@@ -9521,6 +9521,127 @@ fn alt_click_on_file_path_resolves_against_attached_worktree() {
     assert!(app.pane.term_selection.is_none(), "no selection armed");
 }
 
+/// A pane at host (2, 1) showing `text` on its first row, with its links
+/// detected — offset so a drag can leave it past the top or left edge.
+fn pane_with_links(text: &str) -> App {
+    let mut app = App::new();
+    seed_tree(&mut app);
+    let sref = SessionRef::Agent(AgentId("a1".into()));
+    let mut term = AttachedTerm::new(sref, 80, 24);
+    term.parser.process(text.as_bytes());
+    app.pane.term = Some(term);
+    app.pane.term_area = ratatui::layout::Rect::new(2, 1, 80, 24);
+    app.chrome
+        .hits
+        .push((app.pane.term_area, HitTarget::TerminalPane));
+    let screen = app.pane.term.as_ref().unwrap().parser.screen();
+    app.pane.term_links = crate::links::visible_links(screen);
+    app.pane.term_file_links = crate::links::visible_file_links(screen);
+    app
+}
+
+/// A left-button event at pane cell (`col`, 0) of `pane_with_links`.
+fn left(kind: fn(MouseButton) -> MouseEventKind, col: u16) -> MouseEvent {
+    left_at(kind, col + 2, 1)
+}
+
+fn left_at(kind: fn(MouseButton) -> MouseEventKind, column: u16, row: u16) -> MouseEvent {
+    MouseEvent {
+        kind: kind(MouseButton::Left),
+        column,
+        row,
+        modifiers: KeyModifiers::NONE,
+    }
+}
+
+/// `click_opens_links`: a plain click (press and release in one cell)
+/// on a URL opens it; a drag that starts on it does not; with the
+/// setting off a plain click opens nothing.
+#[test]
+fn a_plain_click_opens_a_link_when_click_opens_links_is_on() {
+    let text = "see https://example.com/x now";
+    with_config_json(r#"{"click_opens_links": true}"#, || {
+        let mut app = pane_with_links(text);
+        let mut out = Vec::new();
+        handle_mouse(&mut app, left(MouseEventKind::Down, 8), &mut out);
+        handle_mouse(&mut app, left(MouseEventKind::Up, 8), &mut out);
+        assert_eq!(
+            app.chrome.flash.as_deref(),
+            Some("opened https://example.com/x")
+        );
+
+        let mut app = pane_with_links(text);
+        handle_mouse(&mut app, left(MouseEventKind::Down, 8), &mut out);
+        handle_mouse(&mut app, left(MouseEventKind::Drag, 12), &mut out);
+        handle_mouse(&mut app, left(MouseEventKind::Up, 12), &mut out);
+        assert_ne!(
+            app.chrome.flash.as_deref(),
+            Some("opened https://example.com/x"),
+            "a drag selects, it doesn't open"
+        );
+
+        // A drag up past the pane's top edge clamps to the same cell, but
+        // it is still a drag.
+        let mut app = pane_with_links(text);
+        handle_mouse(&mut app, left(MouseEventKind::Down, 8), &mut out);
+        handle_mouse(&mut app, left_at(MouseEventKind::Drag, 10, 0), &mut out);
+        handle_mouse(&mut app, left_at(MouseEventKind::Up, 10, 0), &mut out);
+        assert_ne!(
+            app.chrome.flash.as_deref(),
+            Some("opened https://example.com/x"),
+            "a drag off the pane doesn't open"
+        );
+
+        // A double-click opens once (the first click) and selects the word.
+        let mut app = pane_with_links(text);
+        handle_mouse(&mut app, left(MouseEventKind::Down, 8), &mut out);
+        handle_mouse(&mut app, left(MouseEventKind::Up, 8), &mut out);
+        assert_eq!(
+            app.chrome.flash.as_deref(),
+            Some("opened https://example.com/x")
+        );
+        handle_mouse(&mut app, left(MouseEventKind::Down, 8), &mut out);
+        handle_mouse(&mut app, left(MouseEventKind::Up, 8), &mut out);
+        assert!(
+            app.chrome
+                .flash
+                .as_deref()
+                .is_some_and(|f| f.starts_with("copied")),
+            "the second click selects, it doesn't open again: {:?}",
+            app.chrome.flash
+        );
+    });
+    with_default_config(|| {
+        let mut app = pane_with_links(text);
+        let mut out = Vec::new();
+        handle_mouse(&mut app, left(MouseEventKind::Down, 8), &mut out);
+        handle_mouse(&mut app, left(MouseEventKind::Up, 8), &mut out);
+        assert!(app.chrome.flash.is_none(), "off by default");
+    });
+}
+
+/// Right-click on a link in the pane copies it: the URL, or the path
+/// with its line.
+#[test]
+fn a_right_click_on_a_link_copies_it() {
+    let mut app = pane_with_links("see https://example.com/x and src/nope.rs:12");
+    let mut out = Vec::new();
+    let right = |col: u16| MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Right),
+        column: col + 2,
+        row: 1,
+        modifiers: KeyModifiers::NONE,
+    };
+    handle_mouse(&mut app, right(8), &mut out);
+    assert_eq!(
+        app.chrome.flash.as_deref(),
+        Some("copied https://example.com/x")
+    );
+    handle_mouse(&mut app, right(32), &mut out);
+    assert_eq!(app.chrome.flash.as_deref(), Some("copied src/nope.rs:12"));
+    assert!(app.modals.overlay.is_none(), "no menu opens");
+}
+
 #[test]
 fn resolve_file_link_handles_diff_prefixes_and_absolutes() {
     let dir = tempfile::tempdir().unwrap();

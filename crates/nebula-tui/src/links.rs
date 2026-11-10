@@ -45,6 +45,27 @@ impl FileLink {
     }
 }
 
+/// What a click in the pane landed on: a URL or a file reference.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PaneLink {
+    Url(String),
+    File { path: String, line: Option<u64> },
+}
+
+impl PaneLink {
+    /// The link as text to copy: the URL, or `path` / `path:line`.
+    pub fn text(&self) -> String {
+        match self {
+            PaneLink::Url(url) => url.clone(),
+            PaneLink::File {
+                path,
+                line: Some(n),
+            } => format!("{path}:{n}"),
+            PaneLink::File { path, line: None } => path.clone(),
+        }
+    }
+}
+
 /// Scan the visible screen for http(s) URLs. Consecutive rows are joined
 /// while `row_wrapped` says the line continues, so a URL split at the pane
 /// edge still matches as one link.

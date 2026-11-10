@@ -3696,6 +3696,9 @@ pub struct PaneState {
     /// File paths detected on the visible screen during the last draw;
     /// ⌥click opens them in the editor modal.
     pub term_file_links: Vec<crate::links::FileLink>,
+    /// `click_opens_links`: the link under a plain left press and the host
+    /// cell pressed, opened on the release if the pointer never left it.
+    pub link_press: Option<((u16, u16), crate::links::PaneLink)>,
     /// Embedded editor modal (find-in-files Enter), above every overlay.
     pub vim: Option<crate::vim_term::VimTerm>,
     /// Where editor reader threads send output; the main loop installs it.
