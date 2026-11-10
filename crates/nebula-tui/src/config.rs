@@ -1118,6 +1118,9 @@ pub struct Config {
     /// its own window and exits): run it detached instead of in the editor
     /// modal, which would only flash empty while the launcher runs.
     pub gui_editor: bool,
+    /// A plain click on a URL or file path in the terminal pane opens it, as
+    /// ⌥click does. A drag that starts on a link still selects.
+    pub click_opens_links: bool,
     /// Opening a file from the file finder (`f`) or find-in-files (`F`)
     /// closes that overlay as the editor modal opens, so quitting the
     /// editor lands back on the panels instead of on the finder the user
@@ -1616,6 +1619,7 @@ impl Default for Config {
             worktree_base_branch: String::new(),
             editor: "vim".into(),
             gui_editor: false,
+            click_opens_links: false,
             close_finder_on_open: true,
             ssh_sync_config: true,
             session_idle_timeout: nebula_core::settings::DEFAULT_SESSION_IDLE_TIMEOUT.into(),
