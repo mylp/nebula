@@ -728,6 +728,9 @@ pub(crate) fn spawn_editor_modal(
     let Some(tx) = app.pane.vim_tx.clone() else {
         return false;
     };
+    if crate::config::Config::load().gui_editor {
+        return launch_gui_editor(app, editor, root, file, line);
+    }
     let (cols, rows) = size;
     app.pane.vim_generation += 1;
     match VimTerm::spawn_editor(
@@ -746,6 +749,36 @@ pub(crate) fn spawn_editor_modal(
         }
         Err(msg) => {
             app.chrome.flash = Some(msg);
+            false
+        }
+    }
+}
+
+/// `gui_editor`: the editor opens its own window, so launch it detached
+/// with the same `+<line> <file>` arguments and open no modal.
+fn launch_gui_editor(
+    app: &mut App,
+    editor: &str,
+    root: &std::path::Path,
+    file: &str,
+    line: u64,
+) -> bool {
+    use std::process::{Command, Stdio};
+    let spawned = Command::new(editor)
+        .args([format!("+{line}"), file.to_string()])
+        .current_dir(root)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn();
+    match spawned {
+        Ok(mut child) => {
+            // Reap it so a finished launcher leaves no zombie.
+            std::thread::spawn(move || child.wait());
+            true
+        }
+        Err(e) => {
+            app.chrome.flash = Some(format!("failed to launch {editor}: {e}"));
             false
         }
     }

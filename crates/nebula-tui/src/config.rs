@@ -1114,6 +1114,10 @@ pub struct Config {
     /// `NEBULA_EDITOR` env var overrides it for the process; see
     /// [`Config::editor_command`].
     pub editor: String,
+    /// The editor is a desktop app (a launcher like `code -g` that opens its
+    /// own window and exits): run it detached instead of in the editor
+    /// modal, which would only flash empty while the launcher runs.
+    pub gui_editor: bool,
     /// Opening a file from the file finder (`f`) or find-in-files (`F`)
     /// closes that overlay as the editor modal opens, so quitting the
     /// editor lands back on the panels instead of on the finder the user
@@ -1611,6 +1615,7 @@ impl Default for Config {
             git_init_on_create: true,
             worktree_base_branch: String::new(),
             editor: "vim".into(),
+            gui_editor: false,
             close_finder_on_open: true,
             ssh_sync_config: true,
             session_idle_timeout: nebula_core::settings::DEFAULT_SESSION_IDLE_TIMEOUT.into(),
