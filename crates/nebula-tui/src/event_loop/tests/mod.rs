@@ -14558,6 +14558,9 @@ fn f_opens_file_finder_listing_tracked_and_untracked() {
 /// editor. The same rule serves a `.md` ⌥clicked in the pane.
 #[test]
 fn a_markdown_file_from_the_finder_or_a_clicked_path_is_read_first() {
+    // Off the dev's config: its `gui_editor` would skip the modal.
+    let cfg = tempfile::tempdir().unwrap();
+    crate::config::pin_config_path(cfg.path().join("config.json"));
     let dir = tempfile::tempdir().unwrap();
     let repo = test_repo(&dir);
     std::fs::write(repo.join("notes.md"), "# Notes\n\n- one\n").unwrap();
@@ -14616,6 +14619,41 @@ fn a_markdown_file_from_the_finder_or_a_clicked_path_is_read_first() {
         Some("a.txt:1"),
         "the editor, at the line"
     );
+}
+
+/// `gui_editor`: a clicked path launches the editor detached with
+/// `+<line> <file>` and opens no modal to flash empty.
+#[test]
+fn a_gui_editor_opens_a_clicked_path_without_the_modal() {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = test_repo(&dir);
+    let mut app = App::new();
+    seed_repo_tree(&mut app, &repo);
+    let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+    app.pane.vim_tx = Some(tx);
+    let log = dir.path().join("args.txt");
+    let script = dir.path().join("editor.sh");
+    std::fs::write(
+        &script,
+        format!("#!/bin/sh\necho \"$(pwd) $@\" > '{}'\n", log.display()),
+    )
+    .unwrap();
+    std::fs::set_permissions(&script, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+    let json = format!(
+        r#"{{"editor": "{}", "gui_editor": true}}"#,
+        script.display()
+    );
+    with_config_json(&json, || open_file_link(&mut app, "a.txt", Some(7)));
+    assert!(app.pane.vim.is_none(), "no editor modal");
+    assert!(app.chrome.flash.is_none(), "{:?}", app.chrome.flash);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    let written = || std::fs::read_to_string(&log).is_ok_and(|a| a.ends_with('\n'));
+    while !written() && std::time::Instant::now() < deadline {
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    let args = std::fs::read_to_string(&log).expect("the editor ran");
+    let cwd = repo.canonicalize().unwrap();
+    assert_eq!(args.trim(), format!("{} +7 a.txt", cwd.display()));
 }
 
 #[test]
@@ -14854,6 +14892,9 @@ fn ctrl_r_flips_a_markdown_preview_between_the_page_and_its_source() {
 
 #[test]
 fn t_opens_tree_browser_folds_dirs_and_filters_hierarchies() {
+    // Off the dev's config: its `gui_editor` would skip the modal.
+    let cfg = tempfile::tempdir().unwrap();
+    crate::config::pin_config_path(cfg.path().join("config.json"));
     let dir = tempfile::tempdir().unwrap();
     let repo = test_repo(&dir);
     std::fs::create_dir_all(repo.join("src/sub")).unwrap();
@@ -15051,6 +15092,9 @@ fn file_preview_gets_a_line_number_gutter_but_listings_dont() {
 
 #[test]
 fn embedded_editor_takes_over_the_preview_pane() {
+    // Off the dev's config: its `gui_editor` would skip the modal.
+    let cfg = tempfile::tempdir().unwrap();
+    crate::config::pin_config_path(cfg.path().join("config.json"));
     let dir = tempfile::tempdir().unwrap();
     let repo = test_repo(&dir);
     let mut app = App::new();

@@ -281,19 +281,29 @@ pub(crate) fn spawn_open_command(command: &str, cwd: &std::path::Path) -> std::i
     if cfg!(test) {
         return Ok(());
     }
+    let mut cmd = std::process::Command::new(nebula_core::shell::user_shell());
+    cmd.arg("-c").arg(command);
+    spawn_detached(cmd, cwd, command)
+}
+
+/// Start `cmd` in `cwd` off the TUI's screen: no stdin, output discarded,
+/// a process group of its own (so it can't take the terminal's foreground),
+/// reaped on a thread that logs a non-zero exit under `what`.
+fn spawn_detached(
+    mut cmd: std::process::Command,
+    cwd: &std::path::Path,
+    what: &str,
+) -> std::io::Result<()> {
     use std::os::unix::process::CommandExt;
-    use std::process::{Command, Stdio};
-    let shell = nebula_core::shell::user_shell();
-    let mut child = Command::new(shell)
-        .arg("-c")
-        .arg(command)
+    use std::process::Stdio;
+    let mut child = cmd
         .current_dir(cwd)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .process_group(0)
         .spawn()?;
-    let command = command.to_string();
+    let command = what.to_string();
     std::thread::spawn(move || match child.wait() {
         Ok(status) if !status.success() => {
             tracing::warn!(%command, %status, "open command failed");
@@ -714,7 +724,8 @@ pub(crate) fn close_finder_behind_editor(app: &mut App) {
 }
 
 /// Boot `editor` on `file` at `line` (cwd `root`) into the editor modal at
-/// grid `size`, replacing whatever it held; a spawn failure flashes. False
+/// grid `size`, replacing whatever it held — or, with `gui_editor`, launch
+/// it detached and open no modal; a spawn failure flashes. False
 /// when nothing was spawned — the main loop isn't running (unit tests
 /// without a channel) or the spawn failed.
 pub(crate) fn spawn_editor_modal(
@@ -728,6 +739,9 @@ pub(crate) fn spawn_editor_modal(
     let Some(tx) = app.pane.vim_tx.clone() else {
         return false;
     };
+    if crate::config::Config::load().gui_editor {
+        return launch_gui_editor(app, editor, root, file, line);
+    }
     let (cols, rows) = size;
     app.pane.vim_generation += 1;
     match VimTerm::spawn_editor(
@@ -746,6 +760,26 @@ pub(crate) fn spawn_editor_modal(
         }
         Err(msg) => {
             app.chrome.flash = Some(msg);
+            false
+        }
+    }
+}
+
+/// `gui_editor`: the editor opens its own window, so launch it detached
+/// with the same `+<line> <file>` arguments and open no modal.
+fn launch_gui_editor(
+    app: &mut App,
+    editor: &str,
+    root: &std::path::Path,
+    file: &str,
+    line: u64,
+) -> bool {
+    let mut cmd = std::process::Command::new(editor);
+    cmd.args([format!("+{line}"), file.to_string()]);
+    match spawn_detached(cmd, root, editor) {
+        Ok(()) => true,
+        Err(e) => {
+            app.chrome.flash = Some(format!("failed to launch {editor}: {e}"));
             false
         }
     }
