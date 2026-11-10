@@ -6,6 +6,10 @@ use crate::links::PaneLink;
 pub(super) fn handle_mouse(app: &mut App, mouse: MouseEvent, out: &mut Vec<ClientRequest>) {
     let mouse_pos = ratatui::layout::Position::new(mouse.column, mouse.row);
     update_pointer(app, &mouse);
+    // A link press lives for its own press/release only.
+    if let MouseEventKind::Down(_) = mouse.kind {
+        app.pane.link_press = None;
+    }
     // The editor modal swallows the mouse entirely — its selection/scroll
     // story is vim's, not ours.
     if app.pane.vim.is_some() {
@@ -658,12 +662,12 @@ fn handle_left_click(app: &mut App, mouse: MouseEvent, out: &mut Vec<ClientReque
     if handle_alt_terminal_link_click(app, mouse) {
         return;
     }
-    // `click_opens_links`: remember the link a plain press lands on; the
-    // press still focuses the pane and arms a selection as usual.
-    app.pane.link_press = (mouse.modifiers.is_empty()
-        && crate::config::Config::load().click_opens_links)
+    let link = mouse
+        .modifiers
+        .is_empty()
         .then(|| pane_link_at(app, mouse))
-        .flatten();
+        .flatten()
+        .filter(|_| crate::config::Config::load().click_opens_links);
     // Any fresh click clears a stale selection highlight; a click on
     // the terminal pane below re-arms one. A button the program was
     // still holding (its release never arrived) is let go the same
@@ -673,6 +677,14 @@ fn handle_left_click(app: &mut App, mouse: MouseEvent, out: &mut Vec<ClientReque
     app.pane.term_mouse_grab = None;
     app.launcher.card_drag = None;
     handle_left_click_target(app, mouse, out);
+    // `click_opens_links`: a single press on a link (it armed a selection
+    // or went to the program) opens it on release; a double-click's second
+    // press selected the word instead.
+    let single =
+        app.pane.term_selection.is_some_and(|s| s.dragging) || app.pane.term_mouse_grab.is_some();
+    app.pane.link_press = link
+        .filter(|_| single)
+        .map(|link| ((mouse.column, mouse.row), link));
     app.chrome.dirty = true;
 }
 
@@ -684,16 +696,15 @@ fn handle_alt_terminal_link_click(app: &mut App, mouse: MouseEvent) -> bool {
     if !mouse.modifiers.contains(KeyModifiers::ALT) {
         return false;
     }
-    let Some((_, link)) = pane_link_at(app, mouse) else {
+    let Some(link) = pane_link_at(app, mouse) else {
         return false;
     };
     open_pane_link(app, link);
     true
 }
 
-/// The URL or file path under the pointer in the terminal pane, with the
-/// pane-relative cell it was found at.
-fn pane_link_at(app: &App, mouse: MouseEvent) -> Option<((u16, u16), PaneLink)> {
+/// The URL or file path under the pointer in the terminal pane.
+fn pane_link_at(app: &App, mouse: MouseEvent) -> Option<PaneLink> {
     if !matches!(
         app.hit_at(mouse.column, mouse.row),
         Some(HitTarget::TerminalPane)
@@ -712,7 +723,7 @@ fn pane_link_at(app: &App, mouse: MouseEvent) -> Option<((u16, u16), PaneLink)> 
             }
         }
     };
-    Some((cell, link))
+    Some(link)
 }
 
 /// A URL to the browser; a file path to the editor (claude/cursor/codex
@@ -913,11 +924,13 @@ fn handle_left_click_target(app: &mut App, mouse: MouseEvent, out: &mut Vec<Clie
 }
 
 fn handle_left_drag(app: &mut App, mouse: MouseEvent, out: &mut Vec<ClientRequest>) {
+    // Raw host cells, not the pane-clamped one: a drag past the pane's edge
+    // is still a drag.
     if app
         .pane
         .link_press
         .as_ref()
-        .is_some_and(|(cell, _)| *cell != pane_cell(app.pane.term_area, mouse.column, mouse.row))
+        .is_some_and(|(at, _)| *at != (mouse.column, mouse.row))
     {
         app.pane.link_press = None; // a drag, not a click
     }
@@ -976,8 +989,8 @@ fn handle_left_release(app: &mut App, mouse: MouseEvent, out: &mut Vec<ClientReq
     } else if app.pane.term_selection.is_some_and(|s| s.dragging) {
         finish_selection(app);
     }
-    if let Some((cell, link)) = link_press {
-        if cell == pane_cell(app.pane.term_area, mouse.column, mouse.row) {
+    if let Some((at, link)) = link_press {
+        if at == (mouse.column, mouse.row) {
             open_pane_link(app, link);
         }
     }
@@ -1136,7 +1149,7 @@ fn handle_right_click(app: &mut App, mouse: MouseEvent, out: &mut Vec<ClientRequ
     // mouse's alone.
     let at = (mouse.column, mouse.row);
     // A link in the terminal pane copies; the pane has no menu otherwise.
-    if let Some((_, link)) = pane_link_at(app, mouse) {
+    if let Some(link) = pane_link_at(app, mouse) {
         let text = link.text();
         copy_and_flash(app, &text, &format!("copied {text}"));
         app.chrome.dirty = true;
