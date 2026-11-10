@@ -14558,6 +14558,9 @@ fn f_opens_file_finder_listing_tracked_and_untracked() {
 /// editor. The same rule serves a `.md` ⌥clicked in the pane.
 #[test]
 fn a_markdown_file_from_the_finder_or_a_clicked_path_is_read_first() {
+    // Off the dev's config: its `gui_editor` would skip the modal.
+    let cfg = tempfile::tempdir().unwrap();
+    crate::config::pin_config_path(cfg.path().join("config.json"));
     let dir = tempfile::tempdir().unwrap();
     let repo = test_repo(&dir);
     std::fs::write(repo.join("notes.md"), "# Notes\n\n- one\n").unwrap();
@@ -14632,7 +14635,7 @@ fn a_gui_editor_opens_a_clicked_path_without_the_modal() {
     let script = dir.path().join("editor.sh");
     std::fs::write(
         &script,
-        format!("#!/bin/sh\necho \"$@\" > {}\n", log.display()),
+        format!("#!/bin/sh\necho \"$(pwd) $@\" > '{}'\n", log.display()),
     )
     .unwrap();
     std::fs::set_permissions(&script, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
@@ -14649,7 +14652,8 @@ fn a_gui_editor_opens_a_clicked_path_without_the_modal() {
         std::thread::sleep(std::time::Duration::from_millis(20));
     }
     let args = std::fs::read_to_string(&log).expect("the editor ran");
-    assert_eq!(args.trim(), "+7 a.txt");
+    let cwd = repo.canonicalize().unwrap();
+    assert_eq!(args.trim(), format!("{} +7 a.txt", cwd.display()));
 }
 
 #[test]
@@ -14888,6 +14892,9 @@ fn ctrl_r_flips_a_markdown_preview_between_the_page_and_its_source() {
 
 #[test]
 fn t_opens_tree_browser_folds_dirs_and_filters_hierarchies() {
+    // Off the dev's config: its `gui_editor` would skip the modal.
+    let cfg = tempfile::tempdir().unwrap();
+    crate::config::pin_config_path(cfg.path().join("config.json"));
     let dir = tempfile::tempdir().unwrap();
     let repo = test_repo(&dir);
     std::fs::create_dir_all(repo.join("src/sub")).unwrap();
@@ -15085,6 +15092,9 @@ fn file_preview_gets_a_line_number_gutter_but_listings_dont() {
 
 #[test]
 fn embedded_editor_takes_over_the_preview_pane() {
+    // Off the dev's config: its `gui_editor` would skip the modal.
+    let cfg = tempfile::tempdir().unwrap();
+    crate::config::pin_config_path(cfg.path().join("config.json"));
     let dir = tempfile::tempdir().unwrap();
     let repo = test_repo(&dir);
     let mut app = App::new();

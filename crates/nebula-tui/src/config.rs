@@ -1114,8 +1114,8 @@ pub struct Config {
     /// `NEBULA_EDITOR` env var overrides it for the process; see
     /// [`Config::editor_command`].
     pub editor: String,
-    /// The editor is a desktop app (a launcher like `code -g` that opens its
-    /// own window and exits): run it detached instead of in the editor
+    /// The editor is a desktop app (a wrapper script that hands the file to
+    /// its own window and exits): run it detached instead of in the editor
     /// modal, which would only flash empty while the launcher runs.
     pub gui_editor: bool,
     /// Opening a file from the file finder (`f`) or find-in-files (`F`)
